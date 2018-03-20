@@ -23,7 +23,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-
+static struct list wait_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -91,6 +91,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&wait_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -225,6 +226,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
+  list_insert_ordered(&wait_list, &(thread_current ()->elem), (list_less_func *) &tick_sort_compare, NULL);
   schedule ();
 }
 
@@ -585,3 +587,13 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+void
+thread_wake (int64_t current_tick)
+{
+  struct thread *obj = list_entry(list_front(&wait_list),struct thread,elem);
+  if (obj->wait_tick <= current_tick) {
+    list_pop_front(&wait_list);
+    thread_unblock(obj);
+  }
+}

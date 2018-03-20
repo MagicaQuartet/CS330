@@ -522,3 +522,17 @@ list_min (struct list *list, list_less_func *less, void *aux)
     }
   return min;
 }
+bool
+tick_sort_compare(const struct list_elem *a,
+             const struct list_elem *b,
+             void *aux)
+{
+  struct thread * a_thread = list_entry(a,struct thread,elem);
+  struct thread * b_thread = list_entry(b,struct thread,elem);
+  if (a_thread->wait_tick < b_thread->wait_tick) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
