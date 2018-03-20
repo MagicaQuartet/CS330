@@ -70,6 +70,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+bool tick_sort_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -226,7 +227,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
-  list_insert_ordered(&wait_list, &(thread_current ()->elem), (list_less_func *) &tick_sort_compare, NULL);
+  list_insert_ordered(&wait_list, &(thread_current ()->elem), &tick_sort_compare, NULL);
   schedule ();
 }
 
@@ -595,5 +596,21 @@ thread_wake (int64_t current_tick)
   if (obj->wait_tick <= current_tick) {
     list_pop_front(&wait_list);
     thread_unblock(obj);
+  }
+}
+
+
+bool
+tick_sort_compare(const struct list_elem *a,
+				const struct list_elem *b,
+				void *aux)
+{
+  struct thread * a_thread = list_entry(a,struct thread,elem);
+  struct thread * b_thread = list_entry(b,struct thread,elem);
+  if (a_thread->wait_tick < b_thread->wait_tick) {
+    return true;
+  }
+  else {
+    return false;
   }
 }
