@@ -226,8 +226,9 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
-  thread_current ()->status = THREAD_BLOCKED;
-  list_insert_ordered(&wait_list, &(thread_current ()->elem), (list_less_func *) &tick_sort_compare, NULL);
+  struct thread * cur = thread_current ();
+  cur->status = THREAD_BLOCKED;
+  list_insert_ordered(&wait_list, &(cur->elem), (list_less_func *) &tick_sort_compare, NULL);
   schedule ();
 }
 
@@ -592,10 +593,12 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 void
 thread_wake (int64_t current_tick)
 {
-  struct thread *obj = list_entry(list_front(&wait_list),struct thread,elem);
-  if (obj->wait_tick <= current_tick) {
-    list_pop_front(&wait_list);
-    thread_unblock(obj);
+  if (!list_empty (&wait_list)) {
+    struct thread *obj = list_entry(list_front(&wait_list),struct thread,elem);
+    if (obj->wait_tick <= current_tick) {
+      list_pop_front(&wait_list);
+      thread_unblock(obj);
+    }
   }
 }
 
