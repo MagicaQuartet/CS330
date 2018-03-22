@@ -595,14 +595,18 @@ void
 thread_wake (int64_t current_tick)
 {
   enum intr_level old_level;
+	struct thread *obj;
 
   old_level = intr_disable ();
-  if (!list_empty (&wait_list)) {
-    struct thread *obj = list_entry(list_front(&wait_list),struct thread,elem);
+  while (!list_empty (&wait_list)) {
+		obj = list_entry(list_front(&wait_list),struct thread,elem);
     if (obj->wait_tick <= current_tick) {
       list_pop_front(&wait_list);
       thread_unblock(obj);
     }
+		else {
+			break;
+		}
   }
   intr_set_level (old_level);
 }
