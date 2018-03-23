@@ -211,6 +211,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+	thread_yield();
 
   return tid;
 }
@@ -350,15 +351,14 @@ void
 thread_set_priority (int new_priority) 
 {
 	int old_priority = thread_current ()->priority;
-  thread_current ()->priority = new_priority;
+	thread_current ()->priority = new_priority;
 
 	if (old_priority > new_priority && !list_empty(&ready_list)) {
-		struct list_elem * e = list_max (&ready_list, (list_less_func *) &priority_sort_compare, NULL);
-		struct thread * t = list_entry(e, struct thread, elem);
-
-		if (new_priority < t->priority)
+		if (new_priority < list_entry(list_front (&ready_list), struct thread, elem)->priority){
 			thread_yield();
+		}
 	}
+	thread_current()->origin_priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -483,6 +483,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+	t->origin_priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
