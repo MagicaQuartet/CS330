@@ -71,6 +71,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool thread_sort_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool priority_sort_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -629,4 +630,19 @@ thread_sort_compare(const struct list_elem *a,
 			return false;
 		}
   }
+}
+
+bool
+priority_sort_compare(const struct list_elem *a,
+										const struct list_elem *b,
+										void *aux)
+{
+	struct thread * a_thread = list_entry(a, struct thread, elem);
+	struct thread * b_thread = list_entry(b, struct thread, elem);
+	if (a_thread->priority > b_thread->priority) {
+		return true;
+	}
+	else {
+		return false;
+	}
 }
