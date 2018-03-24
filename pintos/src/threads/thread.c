@@ -72,7 +72,7 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool thread_sort_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool priority_sort_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
-
+void priority_donation(const struct list_elem *to);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -352,7 +352,8 @@ thread_set_priority (int new_priority)
 {
 	int old_priority = thread_current ()->priority;
 	thread_current ()->priority = new_priority;
-
+  if (!list_empty(&thread_current ()->donate_list) && new_priority < list_entry(list_front (&thread_current ()->donate_list), struct thread, wait_thread)->priority)
+    thread_current ()->priority = list_entry(list_front (&thread_current ()->donate_list), struct thread, wait_thread)->priority;
 	if (old_priority > new_priority && !list_empty(&ready_list)) {
 		if (new_priority < list_entry(list_front (&ready_list), struct thread, elem)->priority){
 			thread_yield();
@@ -485,6 +486,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
 	t->origin_priority = priority;
   t->magic = THREAD_MAGIC;
+  t->donating_thread = NULL;
+  list_init (&t->donate_list);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -668,3 +671,11 @@ thread_sema_block (void)
   schedule ();
 }
 
+void
+priority_donation (const struct list_elem *to){
+  struct thread * to_thread = list_entry(to, struct thread, elem);
+  to_thread->priority = thread_current ()->priority;
+  if (to_thread->donating_thread != NULL) {
+    priority_donation (&list_entry(to_thread->donating_thread, struct thread, elem)->elem);
+  }
+}

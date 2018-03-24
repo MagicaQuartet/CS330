@@ -94,6 +94,10 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem wait_thread;
+    struct list_elem *donating_thread;
+    struct list donate_list;
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -142,4 +146,5 @@ int thread_get_load_avg (void);
 void thread_wake (int64_t current_tick);
 bool priority_sort_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_sema_block (void);
+void priority_donation (const struct list_elem *to);
 #endif /* threads/thread.h */
