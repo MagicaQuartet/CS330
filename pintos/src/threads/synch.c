@@ -115,14 +115,15 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+  sema->value++;
   if (!list_empty (&sema->waiters)) {
 		list_sort(&sema->waiters, (list_less_func *) &priority_sort_compare, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+    thread_yield ();
 	}
-  sema->value++;
   intr_set_level (old_level);
-	thread_yield();
+	//thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -203,6 +204,8 @@ lock_acquire (struct lock *lock)
 	if (lock->holder != NULL && lock->holder->priority < thread_current ()->priority) {
 		//lock->holder->priority = thread_current ()->priority;
     list_insert_ordered(&lock->holder->donate_list, &thread_current ()->wait_thread, (list_less_func *) &priority_sort_compare, NULL);
+    if (!list_empty (&(&lock->semaphore)->waiters))
+      list_remove (&list_entry (list_front (&(&lock->semaphore)->waiters), struct thread, elem)->wait_thread);
     thread_current ()->donating_thread = &lock->holder->elem;
     priority_donation (&lock->holder->elem);
   }
@@ -239,22 +242,29 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
+  struct list_elem * tmp;
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-	
+  enum intr_level old_level;
+	old_level = intr_disable ();
+
   if (!list_empty (&(&lock->semaphore)->waiters)) {
+
     list_remove(&list_entry(list_front(&(&lock->semaphore)->waiters), struct thread, elem)->wait_thread);
   }
 	if (lock->holder->priority != lock->holder->origin_priority)
     if (!list_empty(&lock->holder->donate_list)) {
       //list_remove(&list_entry(list_front(&(&lock->semaphore)->waiters), struct thread, elem)->wait_thread);
 		  lock->holder->priority = list_entry(list_front(&lock->holder->donate_list), struct thread, wait_thread)->priority;
+      //tmp = list_pop_front (&lock->holder->donate_list);
+      //thread_current ()->donate_list = lock->holder->donate_list;
     }
     else
       lock->holder->priority = lock->holder->origin_priority;
   lock->holder->donating_thread = NULL;
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  intr_set_level (old_level);
   //thread_yield();
 }
 
