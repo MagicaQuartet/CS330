@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool foo (const struct list_elem *a, const struct list_elem *b, void *aux);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -272,6 +274,7 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+		int priority;
   };
 
 /* Initializes condition variable COND.  A condition variable
@@ -287,7 +290,8 @@ cond_init (struct condition *cond)
 
 /* Atomically releases LOCK and waits for COND to be signaled by
    some other piece of code.  After COND is signaled, LOCK is
-   reacquired before returning.  LOCK must be held before calling
+   reacquired before returning.  LOCK must be held before callingbool
+foo (const struct list_elem *a, const struct list_elem *b, void *aux)
    this function.
 
    The monitor implemented by this function is "Mesa" style, not
@@ -316,7 +320,8 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+	waiter.priority = thread_current()->priority;
+	list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -337,9 +342,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
+  if (!list_empty (&cond->waiters)) { 
+		list_sort(&cond->waiters, (list_less_func *) &foo, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -356,4 +363,17 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+bool
+foo (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct semaphore_elem * a_sema = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem * b_sema = list_entry(b, struct semaphore_elem, elem);
+	if (a_sema->priority > b_sema->priority) {
+		return true;
+	}
+	else{
+		return false;
+	}
 }
