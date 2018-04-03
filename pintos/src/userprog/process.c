@@ -41,7 +41,8 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+
   return tid;
 }
 
@@ -53,7 +54,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
+	
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -86,9 +87,11 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+	struct thread* t = (struct thread*) &child_tid;
+	while (t->status != THREAD_DYING) {}
+	return -1;
 }
 
 /* Free the current process's resources. */
@@ -213,14 +216,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
-  int i;
+  int i, arg_cnt = 0;
+	char *token, *save_ptr;
+	void **tok_p_arr;
+	void *temp;
+
+	tok_p_arr = palloc_get_page (0);
+
+	token = strtok_r (file_name, " ", &save_ptr);
+	if (token == NULL) {
+		printf ("strtok_r failed\n");
+		goto done;
+	}
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
+	
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -228,7 +242,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+	
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -241,7 +255,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
-
+	
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -305,13 +319,49 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
+	*esp = *esp - strlen(token) - 1;
+	strlcpy(*esp, token, strlen(token) + 1);
+	tok_p_arr[arg_cnt++] = *esp;
+
+	for (token = strtok_r (save_ptr, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
+		*esp = *esp - strlen(token) - 1;
+		strlcpy(*esp, token, strlen(token) + 1);
+		tok_p_arr[arg_cnt++] = *esp;
+	}
+
+	while((uintptr_t)*esp % 4) {
+		*esp -= 1;
+		memset(*esp, 0, 1);
+	}
+
+	*esp -= sizeof(char *);
+	memset(*esp, 0, sizeof(char *));
+
+	for (i = arg_cnt - 1; i >= 0; i--) {
+		*esp -= sizeof(char *);
+		memcpy(*esp, &tok_p_arr[i], sizeof(char *));
+	}
+
+	temp = *esp;
+	*esp -= sizeof(char **);
+	memcpy(*esp, &temp, sizeof(char **));
+
+	*esp -= sizeof(int);
+	memcpy(*esp, &arg_cnt, sizeof(int));
+
+	*esp -= sizeof(void *);
+	memset(*esp, 0, sizeof(void *));
+
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
+
+	hex_dump((uintptr_t)*esp, *esp, 0xc0000000 - (uintptr_t)*esp, true);
 
   success = true;
 
  done:
   /* We arrive here whether the load is successful or not. */
+	palloc_free_page (tok_p_arr);
   file_close (file);
   return success;
 }
