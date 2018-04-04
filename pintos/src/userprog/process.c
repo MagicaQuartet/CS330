@@ -89,9 +89,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-	struct thread* t = (struct thread*) &child_tid;
-	while (t->status != THREAD_DYING) {}
-	return -1;
+	struct thread *t = find_thread(child_tid);
+	while (t != NULL) {
+		t = find_thread(child_tid);
+	}
+	return 0;
 }
 
 /* Free the current process's resources. */
@@ -354,8 +356,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
-
-	hex_dump((uintptr_t)*esp, *esp, 0xc0000000 - (uintptr_t)*esp, true);
 
   success = true;
 
