@@ -471,7 +471,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
 	sema_init(&t->sema, 1);
+	sema_init(&t->exec_sema_1, 1);
+	sema_init(&t->exec_sema_2, 0);
 	sema_down(&t->sema);
+	sema_down(&t->exec_sema_1);
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -591,15 +594,21 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 struct thread *
-find_thread (tid_t tid) {
+find_thread_in_list (struct list* lst, tid_t tid) {
 	struct list_elem *e;
 	struct thread *t;
 
-	for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+	for (e = list_begin(lst); e != list_end(lst); e = list_next(e)) {
 		t = list_entry(e, struct thread, allelem);
 		if (t->tid == tid) {
 			return t;
 		}
 	}
 	return NULL;
+}
+
+struct thread *
+find_thread (tid_t tid)
+{
+	return find_thread_in_list (&all_list, tid);
 }

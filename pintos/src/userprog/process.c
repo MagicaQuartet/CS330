@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include <list.h>
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -29,6 +30,7 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy, *token, *temp;
+	struct thread *t;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -44,9 +46,17 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
 		palloc_free_page (token);
+	}
+
+	t = find_thread(tid);
+	sema_up(&t->exec_sema_2);
+	sema_down(&t->exec_sema_1);
+	if (!t->exec_status) {
+		tid = TID_ERROR;
 	}
 
   return tid;
@@ -67,6 +77,9 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+	thread_current()->exec_status = success;
+	sema_up(&thread_current()->exec_sema_1);
+	sema_down(&thread_current()->exec_sema_2);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -103,8 +116,9 @@ process_wait (tid_t child_tid)
 	intr_set_level(old_level);
 	if (t != NULL) {
 		sema_down(&t->sema);
+		return t->exit_status;
 	}
-	return 0;
+	return -1;
 }
 
 /* Free the current process's resources. */

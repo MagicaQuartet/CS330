@@ -93,8 +93,18 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+		struct list_elem child_elem;
 
-		struct semaphore sema;
+		struct list child_list;
+
+		/* Synchronization between parent and child. */
+		struct semaphore sema;							/* process_wait() */
+		struct semaphore exec_sema_1;				/* load() sync during exec syscall */
+		struct semaphore exec_sema_2;				/* after load(), wait for parent */
+		
+		/* Status */
+		int exit_status;
+		bool exec_status;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -141,6 +151,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-struct thread *find_thread (tid_t);
+struct thread *find_thread (tid_t tid);
+struct thread *find_thread_in_list (struct list *lst, tid_t tid);
 
 #endif /* threads/thread.h */

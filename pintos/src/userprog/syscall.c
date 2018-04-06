@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_uaddr (void *p);
@@ -25,13 +26,19 @@ syscall_handler (struct intr_frame *f)
 	switch (syscall)
 	{
 		case SYS_HALT:
+			shutdown_power_off();
 			break;
 		case SYS_EXIT:
-			if (thread_current()->pagedir != NULL)
+			if (thread_current()->pagedir != NULL) {
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
+				thread_current()->exit_status = *(int *)p;
+			}
 			thread_exit();
 			break;
 		case SYS_EXEC:
+			if (is_valid_uaddr (*(void **)p)) {
+				process_execute (*(char **)p);
+			}
 			break;
 		case SYS_WAIT:
 			break;
@@ -60,7 +67,6 @@ syscall_handler (struct intr_frame *f)
 		case SYS_CLOSE:
 			break;
 	}
-  thread_yield ();
 }
 
 static bool
