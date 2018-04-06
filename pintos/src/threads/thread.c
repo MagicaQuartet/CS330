@@ -298,6 +298,8 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+	sema_up(&thread_current()->sema);
+	process_exit();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -468,6 +470,8 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+	sema_init(&t->sema, 1);
+	sema_down(&t->sema);
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }

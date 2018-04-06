@@ -3,8 +3,11 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
+static bool is_valid_uaddr (void *p);
 
 void
 syscall_init (void) 
@@ -24,8 +27,8 @@ syscall_handler (struct intr_frame *f)
 		case SYS_HALT:
 			break;
 		case SYS_EXIT:
-			printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
-			//hex_dump((uintptr_t)p, p, 0x50, true);
+			if (thread_current()->pagedir != NULL)
+				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
 			thread_exit();
 			break;
 		case SYS_EXEC:
@@ -45,7 +48,9 @@ syscall_handler (struct intr_frame *f)
 		case SYS_WRITE:
 			if (*(int *)p == 1) {
 				p += sizeof(int);
-				putbuf(*(char **)p, *(size_t *)(p+sizeof(char *)));
+				if (is_valid_uaddr (*(void **)p)) {
+					putbuf(*(char **)p, *(size_t *)(p+sizeof(char *)));
+				}
 			}
 			break;
 		case SYS_SEEK:
@@ -56,4 +61,15 @@ syscall_handler (struct intr_frame *f)
 			break;
 	}
   thread_yield ();
+}
+
+static bool
+is_valid_uaddr (void *p)
+{
+	if(p != NULL && is_user_vaddr(p) && pagedir_get_page (thread_current()->pagedir, p) != NULL) {
+		return true;
+	}
+	else {
+		return false;
+	}
 }
