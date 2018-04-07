@@ -52,9 +52,9 @@ process_execute (const char *file_name)
 		palloc_free_page (token);
 	}
 
-	t = find_thread(tid);
-	sema_up(&t->exec_sema_2);
-	sema_down(&t->exec_sema_1);
+	t = find_child_thread(&thread_current()->child_list, tid);
+	sema_up(&t->sema_child_list);
+	sema_down(&t->sema_load);
 	if (!t->exec_status) {
 		tid = TID_ERROR;
 	}
@@ -78,8 +78,8 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 	thread_current()->exec_status = success;
-	sema_up(&thread_current()->exec_sema_1);
-	sema_down(&thread_current()->exec_sema_2);
+	sema_up(&thread_current()->sema_load);
+	sema_down(&thread_current()->sema_child_list);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -109,14 +109,14 @@ int
 process_wait (tid_t child_tid) 
 {
 	struct thread *t;
-	enum intr_level old_level;
+	int status;
 	
-	old_level = intr_disable();
-	t = find_thread(child_tid);
-	intr_set_level(old_level);
+	t = find_child_thread(&thread_current()->child_list, child_tid);
 	if (t != NULL) {
-		sema_down(&t->sema);
-		return t->exit_status;
+		status = t->exit_status;
+		sema_up(&t->sema_child_wait);
+		sema_down(&t->sema_wait);
+		return status;
 	}
 	return -1;
 }

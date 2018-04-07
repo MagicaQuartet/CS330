@@ -98,10 +98,11 @@ struct thread
 		struct list child_list;
 
 		/* Synchronization between parent and child. */
-		struct semaphore sema;							/* process_wait() */
-		struct semaphore exec_sema_1;				/* load() sync during exec syscall */
-		struct semaphore exec_sema_2;				/* after load(), wait for parent */
-		
+		struct semaphore sema_wait;					/* process_wait() */
+		struct semaphore sema_load;					/* load() sync during exec syscall */
+		struct semaphore sema_child_list;		/* before thread_exit(), wait for parent*/
+		struct semaphore sema_child_wait;
+
 		/* Status */
 		int exit_status;
 		bool exec_status;
@@ -151,7 +152,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-struct thread *find_thread (tid_t tid);
-struct thread *find_thread_in_list (struct list *lst, tid_t tid);
+struct thread *find_child_thread (struct list *lst, tid_t tid);
 
 #endif /* threads/thread.h */
