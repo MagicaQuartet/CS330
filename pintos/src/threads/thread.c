@@ -290,7 +290,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-	struct list_elem *child;
+	struct list_elem *e;
 	struct thread *t;
 
 #ifdef USERPROG
@@ -302,10 +302,10 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
 	
-	for (child = list_begin(&thread_current()->child_list); child != list_end(&thread_current()->child_list); child = list_next(child)) {
-		t = list_entry(child, struct thread, child_elem);
+	for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list); e = list_next(e)) {
+		t = list_entry(e, struct thread, child_elem);
 		sema_up(&t->sema_child_wait);
-		list_remove(child);
+		list_remove(e);
 	}
 
 	sema_down(&thread_current()->sema_child_wait);
@@ -482,12 +482,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
 	list_init(&t->child_list);
+	list_init(&t->file_list);
 	sema_init(&t->sema_wait, 0);
 	sema_init(&t->sema_load, 0);
 	sema_init(&t->sema_child_list, 0);
 	sema_init(&t->sema_child_wait, 0);
 	t->exit_status = -1;
 	t->exec_status = false;
+	t->fd_cnt = 2;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }

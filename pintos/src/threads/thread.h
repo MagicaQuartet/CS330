@@ -96,6 +96,7 @@ struct thread
 		struct list_elem child_elem;
 
 		struct list child_list;
+		struct list file_list;
 
 		/* Synchronization between parent and child. */
 		struct semaphore sema_wait;					/* process_wait() */
@@ -106,6 +107,9 @@ struct thread
 		/* Status */
 		int exit_status;
 		bool exec_status;
+
+		/* File descripter count  */
+		int fd_cnt;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
