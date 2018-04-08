@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
@@ -236,6 +237,7 @@ read_handler (int fd, void *buffer, unsigned size)
 	unsigned _size = size;
 	void *p = buffer;
 	struct file_info *finfo;
+	int result;
 
 	if (fd == 0) {
 		while (_size-- > 0) {
@@ -250,7 +252,8 @@ read_handler (int fd, void *buffer, unsigned size)
 	else {
 		finfo = find_opened_file_info(fd);
 		if (finfo != NULL) {
-			return file_read(finfo->file_p, buffer, size);
+			result = file_read(finfo->file_p, buffer, size);
+			return result;
 		}
 
 		return -1;
@@ -261,10 +264,12 @@ int
 write_handler (int fd, const void *buffer, unsigned size)
 {
 	struct file_info *finfo;
+	int result;
 	
 	finfo = find_opened_file_info(fd);
 	if (finfo != NULL) {
-		return file_write (finfo->file_p, buffer, size);
+		result = file_write (finfo->file_p, buffer, size);
+		return result;
 	}
 
 	return -1;
