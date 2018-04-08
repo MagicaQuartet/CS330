@@ -4,6 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
 #include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
@@ -200,7 +201,7 @@ syscall_handler (struct intr_frame *f)
 int
 open_handler(const char *name)
 {
-	struct file_info *finfo;
+	struct file_info *finfo = palloc_get_page(0);
 	struct file *f;
 
 	f = filesys_open(name);
@@ -295,6 +296,7 @@ close_handler(int fd)
 	finfo = find_opened_file_info(fd);
 	if (finfo != NULL) {
 		list_remove (&finfo->elem);
+		palloc_free_page(finfo);
 		return true;
 	}
 
