@@ -312,6 +312,7 @@ thread_exit (void)
 	sema_up(&thread_current()->sema_wait);
   list_remove (&thread_current()->allelem);
 	list_remove (&thread_current()->child_elem);
+	sema_down(&thread_current()->sema_terminate);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -487,6 +488,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	sema_init(&t->sema_load, 0);
 	sema_init(&t->sema_child_list, 0);
 	sema_init(&t->sema_child_wait, 0);
+	sema_init(&t->sema_terminate, 0);
 	t->exit_status = -1;
 	t->exec_status = false;
 	t->fd_cnt = 2;

@@ -103,6 +103,7 @@ struct thread
 		struct semaphore sema_load;					/* load() sync during exec syscall */
 		struct semaphore sema_child_list;		/* before thread_exit(), wait for parent*/
 		struct semaphore sema_child_wait;
+		struct semaphore sema_terminate;
 
 		/* Status */
 		int exit_status;

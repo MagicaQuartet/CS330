@@ -210,6 +210,9 @@ open_handler(const char *name)
 		finfo->fd = (thread_current()->fd_cnt)++;
 		finfo->file_p = f;
 		list_push_back (&thread_current()->file_list, &finfo->elem);
+		if (strcmp(name, thread_current()->name) == 0){
+			file_deny_write(f);
+		}
 		return finfo->fd;
 	}
 	else {
@@ -300,6 +303,7 @@ close_handler(int fd)
 
 	finfo = find_opened_file_info(fd);
 	if (finfo != NULL) {
+		file_allow_write(finfo->file_p);
 		list_remove (&finfo->elem);
 		palloc_free_page(finfo);
 		return true;

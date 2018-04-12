@@ -113,9 +113,10 @@ process_wait (tid_t child_tid)
 	
 	t = find_child_thread(&thread_current()->child_list, child_tid);
 	if (t != NULL) {
-		status = t->exit_status;
 		sema_up(&t->sema_child_wait);
 		sema_down(&t->sema_wait);
+		status = t->exit_status;
+		sema_up(&t->sema_terminate);
 		return status;
 	}
 	return -1;
