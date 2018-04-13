@@ -8,9 +8,11 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -19,6 +21,13 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
+
+struct file_info
+{
+	struct list_elem elem;
+	int fd;
+	struct file* file_p;
+};
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -290,7 +299,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-	struct list_elem *e;
+	struct list_elem *e, *temp;
 	struct thread *t;
 
 #ifdef USERPROG
@@ -313,6 +322,12 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
 	list_remove (&thread_current()->child_elem);
 	sema_down(&thread_current()->sema_terminate);
+	for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); ) {
+		temp = e;
+		e = list_remove(e);
+		file_close(list_entry(temp, struct file_info, elem)->file_p);
+		free(list_entry(temp, struct file_info, elem));
+	}
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();

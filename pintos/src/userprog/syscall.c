@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "devices/input.h"
@@ -202,8 +203,12 @@ syscall_handler (struct intr_frame *f)
 int
 open_handler(const char *name)
 {
-	struct file_info *finfo = palloc_get_page(0);
+	struct file_info *finfo = (struct file_info *)malloc(sizeof(struct file_info));
 	struct file *f;
+
+	if (finfo == NULL) {
+		printf("open_handler: malloc failed!\n");
+	}
 
 	f = filesys_open(name);
 	if (f != NULL) {
@@ -216,6 +221,7 @@ open_handler(const char *name)
 		return finfo->fd;
 	}
 	else {
+		free(finfo);
 		return -1;
 	}
 }
@@ -305,7 +311,7 @@ close_handler(int fd)
 	if (finfo != NULL) {
 		file_allow_write(finfo->file_p);
 		list_remove (&finfo->elem);
-		palloc_free_page(finfo);
+		free(finfo);
 		return true;
 	}
 

@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include <list.h>
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -36,11 +37,13 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-	token = palloc_get_page (0);
-  if (fn_copy == NULL)
+	token = (char *)malloc(15*sizeof(char));
+  if (fn_copy == NULL || token == NULL){
+		printf("process_execute: alloc failed!\n");
     return TID_ERROR;
+	}
   strlcpy (fn_copy, file_name, PGSIZE);
-	strlcpy (token, file_name, PGSIZE);
+	strlcpy (token, file_name, 15*sizeof(char));
 
 	strtok_r (token, " ", &temp);
 
