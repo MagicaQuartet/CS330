@@ -52,7 +52,7 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
-		palloc_free_page (token);
+		free(token);
 	}
 
 	t = find_child_thread(&thread_current()->child_list, tid);

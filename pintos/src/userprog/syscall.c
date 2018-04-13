@@ -309,7 +309,7 @@ close_handler(int fd)
 
 	finfo = find_opened_file_info(fd);
 	if (finfo != NULL) {
-		file_allow_write(finfo->file_p);
+		file_close(finfo->file_p);
 		list_remove (&finfo->elem);
 		free(finfo);
 		return true;
