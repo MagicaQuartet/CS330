@@ -1,11 +1,17 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <debug.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#endif
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -150,14 +156,61 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-	if (f->esp != NULL && is_user_vaddr(f->esp) && pagedir_get_page(thread_current()->pagedir, f->esp) != NULL) {
+#ifdef VM
+	if (!is_user_vaddr (fault_addr) || fault_addr < VADDR_BASE) {
+#endif
 		printf("%s: exit(%d)\n", thread_current()->name, -1);
 		thread_current()->exit_status = -1;
 		f->eax = -1;
 		thread_exit();
+#ifdef VM
 	}
+	else {
+		void *fault_page;
+		void *kpage;
+
+		fault_page = pg_round_down(fault_addr);
+		kpage = pagedir_get_page(thread_current()->pagedir, fault_page);
+		if (kpage == NULL) {																														// ASSUMPTION: in this case, stack growth
+			if (fault_page < pg_round_down(f->esp) && pg_round_up(fault_addr) != pg_round_down(f->esp)){
+				printf("%s: exit(%d)\n", thread_current()->name, -1);
+				thread_current()->exit_status = -1;
+				f->eax = -1;
+				thread_exit();
+			}
+			else {
+				kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+				if (kpage == NULL)
+					PANIC ("page_fault: out of memory in user pool (kpage)");
+	
+				set_frame_entry(fault_page, kpage);
+					
+				// printf("fault_addr %p, f->esp %p\n", fault_addr, f->esp);
+	
+				if (!pagedir_set_page (thread_current()->pagedir, fault_page, kpage, true)) {		// TODO: how to determine writable?
+					PANIC ("page_fault: pagedir_set_page failed");
+				}
+			}
+		}
+		else {
+			struct s_page_entry *s_pte;
+
+			s_pte = page_lookup (fault_page);
+			if (s_pte == NULL)
+				PANIC ("page_fault: mapped in pagedir but not in s_page_table");
+
+			if (!(s_pte->is_swapped)) {																			// TODO: handle this case in better way
+				// PANIC ("page_fault: normal situation but page fault?");
+				printf("%s: exit(%d)\n", thread_current()->name, -1);
+				thread_current()->exit_status = -1;
+				f->eax = -1;
+				thread_exit();
+			}
+			else {
+				printf(">>>Let's implement swap system!<<<");
+			}
+		}
+	}
+#endif
 }
 
