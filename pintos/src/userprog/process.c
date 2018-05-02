@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <list.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -16,9 +17,12 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
-#include <list.h>
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -130,7 +134,7 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
-  uint32_t *pd;
+  uint32_t *pd, *pt;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -148,6 +152,14 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+#ifdef VM
+	pt = cur->s_pt;
+	if (pt != NULL)
+	{
+		cur->s_pt = NULL;
+		s_page_table_destroy (pt);
+	}
+#endif
 }
 
 /* Sets up the CPU for running user code in the current
@@ -265,6 +277,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+#ifdef VM
+	t->s_pt = s_page_table_create();
+#endif
 	
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -536,7 +551,9 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-
+#ifdef VM
+	set_frame_entry(upage, kpage);
+#endif
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL

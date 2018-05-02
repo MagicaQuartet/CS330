@@ -117,6 +117,10 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+#ifdef VM
+		uint32_t *s_pt;
+#endif
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
