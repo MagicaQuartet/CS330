@@ -638,3 +638,21 @@ find_child_thread (struct list* lst, tid_t tid) {
 	}
 	return NULL;
 }
+
+struct thread *
+find_thread (tid_t tid)
+{
+	struct list_elem *e;
+	struct thread *t = NULL;
+	enum intr_level old_level;
+	
+	old_level = intr_disable();
+	for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+		t = list_entry (e, struct thread, allelem);
+		if (t->tid == tid)
+			break;
+	}
+
+	intr_set_level(old_level);
+	return t;
+}

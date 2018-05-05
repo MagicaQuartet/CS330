@@ -74,7 +74,7 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
       if (create)
         {
           pt = palloc_get_page (PAL_ZERO);
-          if (pt == NULL) 
+          if (pt == NULL)
             return NULL; 
       
           *pde = pde_create (pt);
@@ -116,7 +116,7 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
 #ifdef VM
-			page_insert(upage);
+			page_insert(upage, writable);
 #endif
       return true;
     }

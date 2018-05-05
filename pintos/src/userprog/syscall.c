@@ -8,6 +8,8 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
+#include "userprog/pagefault.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
@@ -22,8 +24,9 @@ int write_handler (int, const void *, unsigned);
 void seek_handler (int, off_t);
 unsigned tell_handler (int);
 bool close_handler (int);
-void bad_exit (struct intr_frame *);
 bool is_valid_uaddr (void *p);
+bool is_in_uspace (void *p);
+bool is_mapped_uaddr (void *p);
 struct file_info *find_opened_file_info (int);
 
 struct file_info
@@ -43,7 +46,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
 	void * p = f->esp;
-	int syscall, temp;
+	int syscall = -1, temp;
 
 	if (is_valid_uaddr(p)){
 		syscall = *(int *)p;
@@ -318,24 +321,25 @@ close_handler(int fd)
 	return false;
 }
 
-void
-bad_exit(struct intr_frame *f) 
-{
-	printf("%s: exit(%d)\n", thread_current()->name, -1);
-	thread_current()->exit_status = -1;
-	f->eax = -1;
-	thread_exit();
-}
-
 bool
 is_valid_uaddr (void *p)
 {
-	if(p != NULL && is_user_vaddr(p) && pagedir_get_page (thread_current()->pagedir, p) != NULL) {
-		return true;
-	}
-	else {
+	if (is_in_uspace(p)) 
+		return is_mapped_uaddr(p);
+	else
 		return false;
-	}
+}
+
+bool
+is_in_uspace (void *p)
+{
+	return p != NULL && is_user_vaddr(p);
+}
+
+bool
+is_mapped_uaddr (void *p)
+{
+	return pagedir_get_page (thread_current()->pagedir, p) != NULL;
 }
 
 struct file_info *

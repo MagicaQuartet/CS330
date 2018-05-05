@@ -3,10 +3,10 @@
 #include <string.h>
 #include <stdio.h>
 #include "vm/page.h"
-#include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "userprog/pagedir.h"
 
 unsigned page_hash (const struct hash_elem *, void *);
 bool page_less (const struct hash_elem *, const struct hash_elem *, void *);
@@ -33,7 +33,7 @@ s_page_table_destroy (uint32_t *p)
 }
 
 void
-page_insert (const void *vaddr)
+page_insert (const void *vaddr, bool writable)
 {
 	if (pg_ofs(vaddr) != 0)
 		PANIC ("page_insert: not page address");
@@ -45,14 +45,17 @@ page_insert (const void *vaddr)
 		PANIC ("page_insert: out of memory (s_page_entry)");
 
 	p->vaddr = vaddr;
+	p->tid = thread_current()->tid;
 	p->is_swapped = false;
+	list_init(&p->sector_list);
+	p->writable = writable;
 
 	hash_insert((struct hash *)(thread_current()->s_pt), &p->hash_elem);
 	//printf("hash size: %d\n", hash_size((struct hash*)(thread_current()->s_pt)));
 }
 
 struct s_page_entry *
-page_lookup (const void *vaddr)
+page_lookup (const void *vaddr, tid_t tid)
 {
 	if (pg_ofs(vaddr) != 0)
 		PANIC ("page_lookup: not page address");
@@ -61,8 +64,33 @@ page_lookup (const void *vaddr)
 	struct hash_elem *e;
 
 	p.vaddr = vaddr;
-	e = hash_find ((struct hash *)(thread_current()->s_pt), &p.hash_elem);
+	e = hash_find ((struct hash *)(find_thread(tid)->s_pt), &p.hash_elem);
 	return e != NULL ? hash_entry(e, struct s_page_entry, hash_elem) : NULL;
+}
+
+void
+page_get_evicted(struct s_page_entry * entry)
+{
+	struct thread *t;
+	entry->is_swapped = true;
+
+	t = find_thread(entry->tid);
+	if (t == NULL)
+		PANIC("page_get_evicted: invalid tid");
+	pagedir_clear_page(t->pagedir, entry->vaddr);
+}
+
+void
+page_swap_in (struct s_page_entry * entry, void *kpage)
+{
+	bool success;
+	if (kpage == NULL)
+		PANIC ("page_swap_in: kpage is null pointer");
+	
+	entry->is_swapped = false;
+	success =	pagedir_set_page(thread_current()->pagedir, entry->vaddr, kpage, entry->writable);
+	if (!success)
+		PANIC ("page_swap_in: pagedir_set_page failed!");
 }
 
 unsigned
