@@ -46,7 +46,7 @@ swap_out (void *buffer)
 	list_insert_ordered(&swap_t->entry_list, &entry->list_elem, swap_list_less, NULL);
 	
 	block_write (swap_block, entry->sector, buffer);
-
+	//printf(" swapout sector_idx : %d, to where : %p\n", entry->sector, buffer);
 	lock_release(&swap_t->lock);
 
 	return entry->sector;
@@ -66,9 +66,11 @@ swap_in (struct s_page_entry *s_pte, void * upage)
 		sector = list_entry(list_pop_front(&s_pte->sector_list), struct sector_elem, list_elem)->sector;
 		remove_swap_entry(sector);
 		block_read (swap_block, sector, kpage + i*BLOCK_SECTOR_SIZE);
+		//printf(" swapin sector_idx : %d, from where : %p vm : %p\n", sector, kpage + i*BLOCK_SECTOR_SIZE, upage);
 	}
 	set_frame_entry(upage, kpage);
 	page_swap_in(s_pte, kpage);
+	//printf("swap_in finish\n");
 }
 
 void

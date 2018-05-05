@@ -117,7 +117,7 @@ process_wait (tid_t child_tid)
 {
 	struct thread *t;
 	int status;
-	
+	//printf("child process id : %d", child_tid);
 	t = find_child_thread(&thread_current()->child_list, child_tid);
 	if (t != NULL) {
 		sema_up(&t->sema_child_wait);
@@ -159,6 +159,7 @@ process_exit (void)
 		cur->s_pt = NULL;
 		s_page_table_destroy (pt);
 	}
+  remove_frame_entry (cur->tid);
 #endif
 }
 

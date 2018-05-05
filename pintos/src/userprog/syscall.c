@@ -208,13 +208,14 @@ open_handler(const char *name)
 {
 	struct file_info *finfo = (struct file_info *)malloc(sizeof(struct file_info));
 	struct file *f;
-
+	//printf("come to open_handler");
 	if (finfo == NULL) {
 		printf("open_handler: malloc failed!\n");
 	}
 
 	f = filesys_open(name);
 	if (f != NULL) {
+		//printf("?? filesys open ok");
 		finfo->fd = (thread_current()->fd_cnt)++;
 		finfo->file_p = f;
 		list_push_back (&thread_current()->file_list, &finfo->elem);

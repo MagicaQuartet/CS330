@@ -31,16 +31,17 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 
 		if (s_pte != NULL) {													// Swapped
 			if (s_pte->is_swapped){
-				swap_in(s_pte, s_pte->vaddr);	
+				swap_in(s_pte, s_pte->vaddr);
+				//printf("I like swapping");	
 			}
 			else {
+				//printf("what is kernel panic recursion?\n");
 				PANIC ("supplemental page table entry exists but not swapped??");
 			}
 		}
 		else {																				// Not mapped yet
 			void *kpage;
 			struct thread *t = thread_current();
-
 			if (!(fault_addr >= f->esp - 32 || (!write && f->esp <= fault_addr))){				// TODO: check this condition
 				bad_exit(f);
 			}

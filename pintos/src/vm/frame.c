@@ -127,6 +127,18 @@ frame_evict()
 	return kpage;
 }
 
+void
+remove_frame_entry (tid_t t){
+	struct list_elem *e;
+	struct frame_entry *entry;
+	for (e = list_begin(&ft->entry_list); e != list_end(&ft->entry_list); e = list_next(e)) {
+		entry = list_entry (e, struct frame_entry, elem);
+		if (entry->tid == t){
+			list_remove (&entry->elem);
+		}
+	}
+}
+
 void *
 find_free_frame()
 {
