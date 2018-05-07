@@ -64,8 +64,10 @@ frame_table_init (size_t user_page_limit)
 bool
 set_frame_entry (void *upage, void *kpage)
 {
-	uintptr_t idx;
+uintptr_t idx;
 	struct frame_entry* entry;
+
+	//printf("set frame entry: tid %d upage %p kpage %p\n", thread_current()->tid, upage, kpage);
 
 	if (pg_ofs(upage) != 0) {
 		printf("upage is not a page address!\n");
@@ -76,17 +78,19 @@ set_frame_entry (void *upage, void *kpage)
 		return false;
 	}
 	
-	lock_acquire(&ft->lock);
+	//lock_acquire(&ft->lock);
 
 	idx = pg_no(kpage) - pg_no(user_pool_base);
 	entry = (struct frame_entry*) ((uintptr_t)(ft->base) + idx * sizeof(struct frame_entry));
+	if (entry->in_use)
+		return false;
 	entry->in_use = true;
 	entry->tid = thread_current()->tid;
 	entry->upage = upage;
 	list_push_back (&ft->entry_list, &entry->elem);
 	// hex_dump_at_frame_table();
 
-	lock_release(&ft->lock);
+	//lock_release(&ft->lock);
 	return true;
 }
 
@@ -124,6 +128,7 @@ frame_evict()
 	//hex_dump_at_user_pool_base();
 	lock_release(&ft->lock);
 
+	//printf("frame evict: tid %d upage %p kpage %p\n", entry->tid, upage, kpage);
 	return kpage;
 }
 

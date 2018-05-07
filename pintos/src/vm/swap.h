@@ -11,3 +11,4 @@ struct swap_entry
 void swap_table_init(void);
 block_sector_t swap_out (void *);
 void swap_in (struct s_page_entry *, void *);
+void remove_swap_entry (block_sector_t);

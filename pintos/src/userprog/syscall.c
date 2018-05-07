@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <round.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -13,8 +14,8 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
-#include "filesys/file.h"
 #include <string.h>
+#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 int open_handler (const char *);
@@ -24,17 +25,10 @@ int write_handler (int, const void *, unsigned);
 void seek_handler (int, off_t);
 unsigned tell_handler (int);
 bool close_handler (int);
-bool is_valid_uaddr (void *p);
-bool is_in_uspace (void *p);
-bool is_mapped_uaddr (void *p);
-struct file_info *find_opened_file_info (int);
-
-struct file_info
-{
-	struct list_elem elem;
-	int fd;
-	struct file* file_p;
-};
+int mmap_handler(int, void *, int);
+bool is_valid_uaddr (void *);
+bool is_in_uspace (void *);
+bool is_mapped_uaddr (void *);
 
 void
 syscall_init (void) 
@@ -201,8 +195,17 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_MMAP:
-			if (*(int *)p == 0 || *(int *)p == 1 || !is_in_uspace(*(void **)(p+sizeof(int))) || (*(void **)(p+sizeof(int))) >= (void *)0x08048000 || (*(void **)(p+sizeof(int)) == NULL) || pg_ofs(*(void **)(p+sizeof(int))) != 0){
+			if (*(int *)p < 0 || !is_in_uspace(*(void **)(p+sizeof(int))) || (*(void **)(p+sizeof(int))) == NULL || pg_ofs(*(void **)(p+sizeof(int))) != 0){
 				f->eax = -1;
+			}
+			else {
+				temp = filesize_handler(*(int *)p);
+				if (temp != -1) {
+					f->eax = mmap_handler(*(int *)p, *(void **)(p+sizeof(int)), temp);
+				}
+				else {
+					f->eax = -1;
+				}
 			}
 			break;
 
@@ -334,6 +337,35 @@ close_handler(int fd)
 	}
 
 	return false;
+}
+
+int
+mmap_handler(int fd, void * addr, int size)
+{
+	int filesize = size;
+	int pages = DIV_ROUND_UP(filesize, PGSIZE);
+	size_t page_read_bytes = 0;
+	int i, mapping;
+
+	mapping = thread_current()->mmap_id;
+	
+	for (i = 0; i < pages; i++) {
+		page_read_bytes = filesize < PGSIZE ? filesize : PGSIZE;
+		if (filesize > PGSIZE)
+			filesize -= PGSIZE;
+
+			if (!mmap_insert(addr + i*PGSIZE, true, fd, mapping, page_read_bytes))
+				return -1;
+	}
+	if (page_read_bytes == PGSIZE) {
+		if (!mmap_insert(addr + pages*PGSIZE, true, fd, mapping, 0))
+			return -1;
+	}
+
+	(thread_current()->mmap_id)++;
+
+//	printf("mmap_hander: done %p\n", addr);
+	return mapping;
 }
 
 bool

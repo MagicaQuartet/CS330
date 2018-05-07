@@ -507,6 +507,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->exit_status = -1;
 	t->exec_status = false;
 	t->fd_cnt = 2;
+	t->mmap_id = 0;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }

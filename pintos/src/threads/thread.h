@@ -119,6 +119,7 @@ struct thread
 
 #ifdef VM
 		uint32_t *s_pt;
+		int mmap_id;
 #endif
 
     /* Owned by thread.c. */

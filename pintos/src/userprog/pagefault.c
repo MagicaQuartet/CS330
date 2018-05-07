@@ -15,8 +15,9 @@ void bad_exit (struct intr_frame *f);
 void
 page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, bool user, void *fault_addr)
 {
+	//printf("page fault: tid %d fault addr %p\n", thread_current()->tid, fault_addr);
 #ifdef VM
-	if (!is_user_vaddr (fault_addr) || fault_addr < VADDR_BASE || !not_present) {
+	if (!is_user_vaddr (fault_addr) || fault_addr == NULL || !not_present) {
 #endif
 		bad_exit(f);
 #ifdef VM
@@ -31,12 +32,10 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 
 		if (s_pte != NULL) {													// Swapped
 			if (s_pte->is_swapped){
-				swap_in(s_pte, s_pte->vaddr);
-				//printf("I like swapping");	
+				swap_in(s_pte, s_pte->upage);
 			}
 			else {
-				//printf("what is kernel panic recursion?\n");
-				PANIC ("supplemental page table entry exists but not swapped??");
+				PANIC ("DO NOT CROSS\n");
 			}
 		}
 		else {																				// Not mapped yet
@@ -50,9 +49,10 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 
 				kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 	
-				if (kpage == NULL)
-					PANIC ("page_fault_handler: out of memory in user pool (kpage)");
-	
+				if (kpage == NULL){
+					kpage = frame_evict();
+				}
+
 				set_frame_entry (fault_page, kpage);
 	
 				if (pagedir_get_page (t->pagedir, fault_page) == NULL) {

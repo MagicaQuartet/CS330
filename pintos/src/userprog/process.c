@@ -134,7 +134,7 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
-  uint32_t *pd, *pt;
+  uint32_t *pd, *pt, *mmap;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -154,6 +154,7 @@ process_exit (void)
     }
 #ifdef VM
 	pt = cur->s_pt;
+	remove_page_block_sector(pt);
 	if (pt != NULL)
 	{
 		cur->s_pt = NULL;
@@ -493,7 +494,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
-
+			if (kpage == NULL)
+				kpage = frame_evict();
       if (kpage == NULL)
         return false;
       /* Load this page. */
@@ -529,6 +531,8 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+	if (kpage == NULL)
+		kpage = frame_evict();
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -556,7 +560,8 @@ install_page (void *upage, void *kpage, bool writable)
 #ifdef VM
 	set_frame_entry(upage, kpage);
 #endif
-  /* Verify that there's not already a page at that virtual
+
+	/* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
