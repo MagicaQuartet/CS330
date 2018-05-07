@@ -210,6 +210,9 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_MUNMAP:
+			if (*(int *)p < thread_current()->mmap_id) {
+				unmap(*(int *)p);
+			}
 			break;
 
 		default:
@@ -354,11 +357,11 @@ mmap_handler(int fd, void * addr, int size)
 		if (filesize > PGSIZE)
 			filesize -= PGSIZE;
 
-			if (!mmap_insert(addr + i*PGSIZE, true, fd, mapping, page_read_bytes))
+			if (!mmap_insert(addr + i*PGSIZE, true, fd, mapping, i, page_read_bytes))
 				return -1;
 	}
 	if (page_read_bytes == PGSIZE) {
-		if (!mmap_insert(addr + pages*PGSIZE, true, fd, mapping, 0))
+		if (!mmap_insert(addr + pages*PGSIZE, true, fd, mapping, i, 0))
 			return -1;
 	}
 

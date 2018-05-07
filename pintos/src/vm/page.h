@@ -38,4 +38,5 @@ void page_swap_in (struct s_page_entry *, void *);
 void remove_page_block_sector(struct hash *);
 void page_get_evicted(struct s_page_entry *);
 
-bool mmap_insert (const void *, bool, int, int, size_t);
+bool mmap_insert (const void *, bool, int, int, size_t, size_t);
+void unmap(int);

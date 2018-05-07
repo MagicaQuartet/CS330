@@ -3,10 +3,12 @@
 #include <string.h>
 #include <stdio.h>
 #include "vm/swap.h"
+#include "vm/frame.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 
 unsigned page_hash (const struct hash_elem *, void *);
 bool page_less (const struct hash_elem *, const struct hash_elem *, void *);
@@ -55,7 +57,7 @@ page_insert (const void *vaddr, bool writable)
 }
 
 bool
-mmap_insert (const void *vaddr, bool writable, int fd, int mapping, size_t page_read_bytes)
+mmap_insert (const void *vaddr, bool writable, int fd, int mapping, size_t page_idx,  size_t page_read_bytes)
 {
 	if (pg_ofs(vaddr) != 0 || page_lookup(vaddr, thread_current()->tid) != NULL)
 		return false;
@@ -73,6 +75,7 @@ mmap_insert (const void *vaddr, bool writable, int fd, int mapping, size_t page_
 	p->is_swapped = true;
 	p->fd = fd;
 	p->mapping = mapping;
+	p->page_idx = page_idx;
 	p->page_read_bytes = page_read_bytes;
 	p->writable = writable;
 
@@ -138,6 +141,36 @@ remove_page_block_sector(struct hash *table)
 				}
 			}
 
+			e = hash_next(&itr);
+	}
+}
+
+void
+unmap (int mapping)
+{
+	struct hash_elem *e;
+	struct hash_iterator itr;
+	struct s_page_entry *entry;
+
+	hash_first(&itr, (struct hash *)thread_current()->s_pt);
+	e = itr.elem;
+
+	while (e != NULL){
+		entry = hash_entry(e, struct s_page_entry, hash_elem);
+
+		if (entry->fd > 1 && entry->mapping == mapping) {
+			if (!entry->is_swapped) {
+				struct file_info *finfo = find_opened_file_info(entry->fd);
+				file_seek(finfo->file_p, entry->page_idx * PGSIZE);
+				file_write(finfo->file_p, entry->upage, entry->page_read_bytes);
+				file_seek(finfo->file_p, 0);
+				page_get_evicted(entry);
+				remove_frame_entry (thread_current()->tid, entry->upage);
+			}
+			e = hash_next(&itr);
+			hash_delete((struct hash *)thread_current()->s_pt, &entry->hash_elem);
+		}
+		else
 			e = hash_next(&itr);
 	}
 }

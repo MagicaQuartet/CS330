@@ -133,42 +133,15 @@ frame_evict()
 }
 
 void
-remove_frame_entry (tid_t t){
+remove_frame_entry (tid_t t, void *upage){
 	struct list_elem *e;
 	struct frame_entry *entry;
 	for (e = list_begin(&ft->entry_list); e != list_end(&ft->entry_list); e = list_next(e)) {
 		entry = list_entry (e, struct frame_entry, elem);
-		if (entry->tid == t){
+		if (entry->tid == t && (upage == NULL || entry->upage == upage)){
 			list_remove (&entry->elem);
 		}
 	}
-}
-
-void *
-find_free_frame()
-{
-	struct frame_entry *entry;
-	void *kpage;
-	size_t idx = 0;
-	
-	lock_acquire(&ft->lock);
-	entry = (struct frame_entry *)ft->base;
-	
-	while(entry->in_use){
-		entry += 1;
-		idx++;
-		if (idx >= ft->user_pages)
-			break;
-	}
-
-	if (idx == ft->user_pages)
-		kpage = NULL;
-	else
-		kpage = user_pool_base + idx * PGSIZE;
-
-	lock_release(&ft->lock);
-
-	return kpage;
 }
 
 /* Helper function for debugging  */
