@@ -54,7 +54,9 @@ syscall_handler (struct intr_frame *f)
 	else{
 		bad_exit(f);
 	}
-	
+
+	//printf("syscall %d\n", syscall);
+
 	p += sizeof(int);
 	if (!is_valid_uaddr(p)){
 		bad_exit(f);
@@ -108,6 +110,7 @@ syscall_handler (struct intr_frame *f)
 		case SYS_OPEN:
 			if (is_valid_uaddr (*(void **)p)) {
 				temp = open_handler(*(char **)p);
+				//printf(">>>open: return %d<<<\n", temp);
 				if (temp == 0 || temp == 1) {
 					bad_exit(f);
 				}
@@ -197,6 +200,15 @@ syscall_handler (struct intr_frame *f)
 			}
 			break;
 
+		case SYS_MMAP:
+			if (*(int *)p == 0 || *(int *)p == 1 || !is_in_uspace(*(void **)(p+sizeof(int))) || (*(void **)(p+sizeof(int))) >= (void *)0x08048000 || (*(void **)(p+sizeof(int)) == NULL) || pg_ofs(*(void **)(p+sizeof(int))) != 0){
+				f->eax = -1;
+			}
+			break;
+
+		case SYS_MUNMAP:
+			break;
+
 		default:
 			bad_exit(f);
 			break;
@@ -212,8 +224,10 @@ open_handler(const char *name)
 	if (finfo == NULL) {
 		printf("open_handler: malloc failed!\n");
 	}
+	//printf(">>>file name: %s<<<\n", name);
 
 	f = filesys_open(name);
+	//printf(">>>f %p<<<\n", f);
 	if (f != NULL) {
 		//printf("?? filesys open ok");
 		finfo->fd = (thread_current()->fd_cnt)++;
