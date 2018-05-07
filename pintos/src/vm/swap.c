@@ -49,7 +49,7 @@ swap_out (void *buffer)
 	list_insert_ordered(&swap_t->entry_list, &entry->list_elem, swap_list_less, NULL);
 	
 	block_write (swap_block, entry->sector, buffer);
-	//printf(" swapout sector_idx : %d, to where : %p\n", entry->sector, buffer);
+	//printf("swap out sector_idx : %d, to where : %p\n", entry->sector, buffer);
 	lock_release(&swap_t->lock);
 
 	return entry->sector;
@@ -65,7 +65,7 @@ swap_in (struct s_page_entry *s_pte, void * upage)
 	if (kpage == NULL)
 		kpage = frame_evict();
 
-	if (s_pte->fd < 2) {	
+	if (s_pte->file_p == NULL) {
 		for(i = 0; i < cnt; i++){
 			sector = list_entry(list_pop_front(&s_pte->sector_list), struct sector_elem, list_elem)->sector;
 			remove_swap_entry(sector);
@@ -77,29 +77,23 @@ swap_in (struct s_page_entry *s_pte, void * upage)
 		//printf("swap_in finish\n");
 	}
 	else {
-		struct file_info *finfo;
-		int fd = s_pte->fd;
-		finfo = find_opened_file_info(fd);
-		if (finfo != NULL) {
-			while (s_pte != NULL && s_pte->fd == fd && kpage != NULL) {
-				//printf("swap in: tid %d upage %p kpage %p\n", thread_current()->tid, upage, kpage);
-				page_swap_in (s_pte, kpage);
-				set_frame_entry (s_pte->upage, kpage);
-
-				file_read(finfo->file_p, kpage, s_pte->page_read_bytes);
-				if (s_pte->page_read_bytes == PGSIZE)
-					file_seek(finfo->file_p, PGSIZE);
-				else {
-					memset (kpage + s_pte->page_read_bytes, 0, PGSIZE - s_pte->page_read_bytes);
-					break;
-				}
-
-				kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-				if (kpage == NULL)
-					kpage = frame_evict();
-
-				s_pte = page_lookup ((s_pte->upage)+PGSIZE, thread_current()->tid);
+		void * temp = (void *)s_pte->file_p;
+		while (s_pte != NULL && (void *)s_pte->file_p == temp && kpage != NULL) {
+			//printf("swap in: tid %d upage %p kpage %p\n", thread_current()->tid, s_pte->upage, kpage);
+			page_swap_in (s_pte, kpage);
+			set_frame_entry (s_pte->upage, kpage);
+			file_read(s_pte->file_p, kpage, s_pte->page_read_bytes);
+			if (s_pte->page_read_bytes == PGSIZE)
+				file_seek(s_pte->file_p, PGSIZE);
+			else {
+				memset (kpage + s_pte->page_read_bytes, 0, PGSIZE - s_pte->page_read_bytes);
+				break;
 			}
+			kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+			if (kpage == NULL)
+				kpage = frame_evict();
+
+			s_pte = page_lookup ((s_pte->upage)+PGSIZE, thread_current()->tid);
 		}
 	}
 }

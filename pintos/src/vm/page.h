@@ -3,6 +3,7 @@
 #include <list.h>
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "filesys/file.h"
 #include "devices/block.h"
 
 struct s_page_entry
@@ -17,7 +18,7 @@ struct s_page_entry
 	struct list sector_list;
 
 	/* mmap page entry */
-	int fd;
+	struct file * file_p;
 	int mapping;
 	size_t page_idx;
 	size_t page_read_bytes;
@@ -38,5 +39,5 @@ void page_swap_in (struct s_page_entry *, void *);
 void remove_page_block_sector(struct hash *);
 void page_get_evicted(struct s_page_entry *);
 
-bool mmap_insert (const void *, bool, int, int, size_t, size_t);
+bool mmap_insert (const void *, bool, struct file *, int, size_t, size_t);
 void unmap(int);

@@ -7,6 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/loader.h"
+#include "userprog/syscall.h"
 #include "vm/swap.h"
 #include "devices/block.h"
 
@@ -117,13 +118,19 @@ frame_evict()
 	//hex_dump_at_user_pool_base();
 
 	page_entry = page_lookup(upage, entry->tid);
-	
-	for (i = 0; i < cnt; i++){
-		sector_elem = malloc(sizeof(struct sector_elem));
-		sector_elem->sector = swap_out(kpage + i*BLOCK_SECTOR_SIZE);
-		list_push_back(&page_entry->sector_list, &sector_elem->list_elem);
-	}
 
+	if (page_entry->file_p == NULL) {		
+		for (i = 0; i < cnt; i++){
+			sector_elem = malloc(sizeof(struct sector_elem));
+			sector_elem->sector = swap_out(kpage + i*BLOCK_SECTOR_SIZE);
+			list_push_back(&page_entry->sector_list, &sector_elem->list_elem);
+		}
+	}
+	else {
+		file_seek(page_entry->file_p, page_entry->page_idx * PGSIZE);
+		file_write(page_entry->file_p, page_entry->upage, page_entry->page_read_bytes);
+		file_seek(page_entry->file_p, 0);
+	}
 	page_get_evicted(page_entry);
 	//hex_dump_at_user_pool_base();
 	lock_release(&ft->lock);

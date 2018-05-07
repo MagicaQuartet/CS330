@@ -32,6 +32,7 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 
 		if (s_pte != NULL) {													// Swapped
 			if (s_pte->is_swapped){
+				//printf("Let's swap in\n");
 				swap_in(s_pte, s_pte->upage);
 			}
 			else {

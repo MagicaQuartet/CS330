@@ -10,6 +10,8 @@
 #include "userprog/pagedir.h"
 #include "userprog/syscall.h"
 
+void unmap_action (struct hash_elem *, void *);
+
 unsigned page_hash (const struct hash_elem *, void *);
 bool page_less (const struct hash_elem *, const struct hash_elem *, void *);
 
@@ -31,7 +33,20 @@ s_page_table_create ()
 void
 s_page_table_destroy (uint32_t *p)
 {
-	hash_destroy ((struct hash *)p, NULL);		// TODO: destructor should do proper jobs to free all s_page_entry resource
+	hash_destroy ((struct hash *)p, unmap_action);		// TODO: destructor should do proper jobs to free all s_page_entry resource
+}
+
+void
+unmap_action (struct hash_elem *e, void *aux)
+{
+	struct s_page_entry *entry = hash_entry(e, struct s_page_entry, hash_elem);
+	if (entry->file_p != NULL) {
+		if (!entry->is_swapped) {
+			file_seek(entry->file_p, entry->page_idx * PGSIZE);
+			file_write(entry->file_p, entry->upage, entry->page_read_bytes);
+			file_seek(entry->file_p, 0);
+		}
+	}
 }
 
 void
@@ -50,14 +65,14 @@ page_insert (const void *vaddr, bool writable)
 	p->tid = thread_current()->tid;
 	p->is_swapped = false;
 	list_init(&p->sector_list);
-	p->fd = -1;
+	p->file_p = NULL;
 	p->writable = writable;
 
 	hash_insert((struct hash *)(thread_current()->s_pt), &p->hash_elem);
 }
 
 bool
-mmap_insert (const void *vaddr, bool writable, int fd, int mapping, size_t page_idx,  size_t page_read_bytes)
+mmap_insert (const void *vaddr, bool writable, struct file *file_p, int mapping, size_t page_idx,  size_t page_read_bytes)
 {
 	if (pg_ofs(vaddr) != 0 || page_lookup(vaddr, thread_current()->tid) != NULL)
 		return false;
@@ -73,7 +88,7 @@ mmap_insert (const void *vaddr, bool writable, int fd, int mapping, size_t page_
 	p->upage = vaddr;
 	p->tid = thread_current()->tid;
 	p->is_swapped = true;
-	p->fd = fd;
+	p->file_p = file_p;
 	p->mapping = mapping;
 	p->page_idx = page_idx;
 	p->page_read_bytes = page_read_bytes;
@@ -107,6 +122,8 @@ page_get_evicted(struct s_page_entry * entry)
 	if (t == NULL)
 		PANIC("page_get_evicted: invalid tid");
 	pagedir_clear_page(t->pagedir, entry->upage);
+	//pagedir_set_dirty (t->pagedir, entry->upage, false);
+	//pagedir_set_accessed (t->pagedir, entry->upage, false);
 }
 
 void
@@ -135,7 +152,7 @@ remove_page_block_sector(struct hash *table)
 	while (e != NULL) {
 			entry = hash_entry(e, struct s_page_entry, hash_elem);
 
-			if (entry->is_swapped && entry->fd < 2){
+			if (entry->is_swapped && entry->file_p == NULL){
 				for (_e = list_begin(&entry->sector_list); _e != list_end(&entry->sector_list); _e = list_next(_e)){
 					remove_swap_entry(list_entry(_e, struct swap_entry, list_elem)->sector);
 				}
@@ -158,12 +175,11 @@ unmap (int mapping)
 	while (e != NULL){
 		entry = hash_entry(e, struct s_page_entry, hash_elem);
 
-		if (entry->fd > 1 && entry->mapping == mapping) {
-			if (!entry->is_swapped) {
-				struct file_info *finfo = find_opened_file_info(entry->fd);
-				file_seek(finfo->file_p, entry->page_idx * PGSIZE);
-				file_write(finfo->file_p, entry->upage, entry->page_read_bytes);
-				file_seek(finfo->file_p, 0);
+		if (entry->file_p != NULL && entry->mapping == mapping) {
+			if (!entry->is_swapped && pagedir_is_dirty(thread_current()->pagedir, entry->upage)) {
+				file_seek(entry->file_p, entry->page_idx * PGSIZE);
+				file_write(entry->file_p, entry->upage, entry->page_read_bytes);
+				file_seek(entry->file_p, 0);
 				page_get_evicted(entry);
 				remove_frame_entry (thread_current()->tid, entry->upage);
 			}

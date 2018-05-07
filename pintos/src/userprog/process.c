@@ -138,6 +138,16 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+#ifdef VM
+	pt = cur->s_pt;
+	remove_page_block_sector(pt);
+	if (pt != NULL)
+	{
+		cur->s_pt = NULL;
+		s_page_table_destroy (pt);
+	}
+  remove_frame_entry (cur->tid, NULL);
+#endif
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -152,16 +162,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-#ifdef VM
-	pt = cur->s_pt;
-	remove_page_block_sector(pt);
-	if (pt != NULL)
-	{
-		cur->s_pt = NULL;
-		s_page_table_destroy (pt);
-	}
-  remove_frame_entry (cur->tid, NULL);
-#endif
 }
 
 /* Sets up the CPU for running user code in the current
