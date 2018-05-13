@@ -79,12 +79,10 @@ set_frame_entry (void *upage, void *kpage)
 		printf("kpage is not a page address!\n");
 		return false;
 	}
-	lock_acquire_ft();
 	
 	idx = pg_no(kpage) - pg_no(user_pool_base);
 	entry = (struct frame_entry*) ((uintptr_t)(ft->base) + idx * sizeof(struct frame_entry));
 	if (entry->in_use){
-		lock_release_ft();
 		return false;
 	}
 	entry->in_use = true;
@@ -92,7 +90,6 @@ set_frame_entry (void *upage, void *kpage)
 	entry->upage = upage;
 	list_push_back (&ft->entry_list, &entry->elem);
 	
-	lock_release_ft();
 	return true;
 }
 
@@ -107,14 +104,11 @@ frame_evict()
 	uintptr_t idx;
 	int cnt = PGSIZE / BLOCK_SECTOR_SIZE, i;
 	
-	lock_acquire_ft();
 	if (list_empty(&ft->entry_list)) {
-		lock_release_ft();
 		return palloc_get_page(PAL_USER);
 	}
 	else {
 		entry = list_entry(list_pop_front (&ft->entry_list), struct frame_entry, elem);
-		lock_release_ft();
 		entry->in_use = false;
 	
 		upage = entry->upage;

@@ -152,7 +152,5 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
 //	printf("error code: 0x%x\n", f->error_code);
-	
 	page_fault_handler(f, not_present, write, user, fault_addr);
 }
-

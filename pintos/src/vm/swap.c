@@ -16,7 +16,6 @@ struct swap_table
 
 struct swap_table *swap_t;
 struct block *swap_block;
-struct semaphore block_sema;
 
 block_sector_t find_free_sector(void);
 
@@ -78,25 +77,28 @@ swap_in (struct s_page_entry *s_pte, void * upage)
 		//printf("swap_in finish\n");
 	}
 	else {
-		void * temp = (void *)s_pte->file_p;
-		while (s_pte != NULL && (void *)s_pte->file_p == temp && kpage != NULL) {
+		//void * temp = (void *)s_pte->file_p;
+		//while (s_pte != NULL && (void *)s_pte->file_p == temp && kpage != NULL) {
 			//printf("swap in: tid %d upage %p kpage %p\n", thread_current()->tid, s_pte->upage, kpage);
-			page_swap_in (s_pte, kpage);
-			set_frame_entry (s_pte->upage, kpage);
-			file_read(s_pte->file_p, kpage, s_pte->page_read_bytes);
+
+			file_read_at(s_pte->file_p, kpage, s_pte->page_read_bytes, s_pte->page_idx * PGSIZE);
 			//printf("thread %d page_read_bytes: %d\n", thread_current()->tid, s_pte->page_read_bytes);
 			if (s_pte->page_read_bytes == PGSIZE)
 				file_seek(s_pte->file_p, PGSIZE);
 			else {
 				memset (kpage + s_pte->page_read_bytes, 0, PGSIZE - s_pte->page_read_bytes);
+				file_seek(s_pte->file_p, 0);
 			}
-			kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-			if (kpage == NULL)
-				kpage = frame_evict();
 
-			s_pte = page_lookup ((s_pte->upage)+PGSIZE, thread_current()->tid);
-		}
-		file_seek(temp, 0);
+			page_swap_in (s_pte, kpage);
+			set_frame_entry (s_pte->upage, kpage);
+			//kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+			//if (kpage == NULL)
+				//kpage = frame_evict();
+
+			//s_pte = page_lookup ((s_pte->upage)+PGSIZE, thread_current()->tid);
+		//}
+		//file_seek(temp, 0);
 	}
 }
 

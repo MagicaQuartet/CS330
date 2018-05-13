@@ -16,6 +16,8 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "vm/page.h"
+#include "vm/frame.h"
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -301,12 +303,12 @@ thread_exit (void)
   ASSERT (!intr_context ());
 	struct list_elem *e, *temp;
 	struct thread *t;
-	//printf("thread %d exit start\n", thread_current()->tid);
+	//printf("thread %d exit start\n", thread_current()->tid);	
+	lock_acquire(&thread_current()->lock_s_pt);
+	lock_acquire(&thread_current()->lock_pagedir);
 #ifdef USERPROG
 	//printf("thread %d process exit start\n", thread_current()->tid);
 
-	lock_acquire(&thread_current()->lock_s_pt);
-	lock_acquire(&thread_current()->lock_pagedir);
   process_exit ();
 #endif
 
@@ -329,15 +331,9 @@ thread_exit (void)
 	list_remove (&thread_current()->child_elem);
 	sema_down(&thread_current()->sema_terminate);
 	//printf("thread %d close files\n", thread_current()->tid);
-	for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); ) {
-		temp = e;
-		e = list_remove(e);
-		file_close(list_entry(temp, struct file_info, elem)->file_p);
-		free(list_entry(temp, struct file_info, elem));
-	}
-//	printf("thread %d file closed\n", thread_current()->tid);
 
 	//printf("thread %d exit done\n", thread_current()->tid);
+
 	lock_release(&thread_current()->lock_s_pt);
 	lock_release(&thread_current()->lock_pagedir);
   thread_current ()->status = THREAD_DYING;

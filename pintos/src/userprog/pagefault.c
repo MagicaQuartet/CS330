@@ -3,8 +3,10 @@
 #include "userprog/pagefault.h"
 #include "userprog/pagedir.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/frame.h"
 #include "vm/swap.h"
@@ -34,7 +36,9 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 		if (s_pte != NULL) {													// Swapped
 			if (s_pte->is_swapped){
 				//printf("Let's swap in\n");
+				lock_acquire_ft();
 				swap_in(s_pte, s_pte->upage);
+				lock_release_ft();
 			}
 			else {
 				PANIC ("DO NOT CROSS\n");
@@ -48,14 +52,12 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 			}
 			
 			while (pagedir_get_page (t->pagedir, fault_page) == NULL && page_lookup(fault_page, thread_current()->tid) == NULL) {
-				
+				lock_acquire_ft();	
 				kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 	
 				if (kpage == NULL){
 					kpage = frame_evict();
 				}
-
-				set_frame_entry (fault_page, kpage);
 	
 				if (pagedir_get_page (t->pagedir, fault_page) == NULL) {
 					if (!pagedir_set_page (t->pagedir, fault_page, kpage, true)) {
@@ -65,9 +67,11 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 				else {
 					PANIC ("page_fault_handler: upage is already mapped");
 				}
-	
+				
+				set_frame_entry (fault_page, kpage);
 				//page_insert (fault_page, true);
 				//printf("thread %d upage %p -> kpage %p\n", thread_current()->tid, fault_page, kpage);
+				lock_release_ft();
 				fault_page += PGSIZE;
 			}
 		}
@@ -79,6 +83,13 @@ void
 bad_exit(struct intr_frame *f)
 {
 	printf("%s: exit(%d)\n", thread_current()->name, -1);
+	struct list_elem *e, *temp;
+	for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); ) {
+		temp = e;
+		e = list_remove(e);
+		file_close(list_entry(temp, struct file_info, elem)->file_p);
+		free(list_entry(temp, struct file_info, elem));
+	}
 	thread_current()->exit_status = -1;
 	f->eax = -1;
 	thread_exit();

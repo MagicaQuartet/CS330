@@ -66,6 +66,14 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXIT:
 			if (thread_current()->pagedir != NULL) {
+				struct list_elem *e, *temp;
+				for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); ) {
+					temp = e;
+					e = list_remove(e);
+					file_close(list_entry(temp, struct file_info, elem)->file_p);
+					free(list_entry(temp, struct file_info, elem));
+				}
+//	printf("thread %d file closed\n", thread_current()->tid);
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
 				thread_current()->exit_status = *(int *)p;
 				f->eax = *(int *)p;

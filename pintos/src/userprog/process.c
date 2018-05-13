@@ -493,9 +493,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
+			lock_acquire_ft();
 			if (kpage == NULL)
 				kpage = frame_evict();
       if (kpage == NULL) {
+				lock_release_ft();
         return false;
 			}
       /* Load this page. */
@@ -513,9 +515,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         {
           palloc_free_page (kpage);
 					lock_release_pagedir(NULL);
+					lock_release_ft();
           return false; 
         }
 			lock_release_pagedir(NULL);
+			lock_release_ft();
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -532,6 +536,7 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
+	lock_acquire_ft();
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage == NULL)
 		kpage = frame_evict();
@@ -545,6 +550,7 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+	lock_release_ft();
   return success;
 }
 
