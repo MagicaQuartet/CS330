@@ -57,6 +57,7 @@ frame_table_init (size_t user_page_limit)
 	ft->base = palloc_get_multiple(PAL_ZERO, data_pages);
 
 	user_pool_base = free_start + kernel_pages * PGSIZE + bm_pages * PGSIZE;		// cf. init_pool (userprog/process.c)
+
 }
 
 // void
@@ -65,7 +66,7 @@ frame_table_init (size_t user_page_limit)
 bool
 set_frame_entry (void *upage, void *kpage)
 {
-uintptr_t idx;
+	uintptr_t idx;
 	struct frame_entry* entry;
 
 	//printf("set frame entry: tid %d upage %p kpage %p\n", thread_current()->tid, upage, kpage);
@@ -78,20 +79,20 @@ uintptr_t idx;
 		printf("kpage is not a page address!\n");
 		return false;
 	}
+	lock_acquire_ft();
 	
-	//lock_acquire(&ft->lock);
-
 	idx = pg_no(kpage) - pg_no(user_pool_base);
 	entry = (struct frame_entry*) ((uintptr_t)(ft->base) + idx * sizeof(struct frame_entry));
-	if (entry->in_use)
+	if (entry->in_use){
+		lock_release_ft();
 		return false;
+	}
 	entry->in_use = true;
 	entry->tid = thread_current()->tid;
 	entry->upage = upage;
 	list_push_back (&ft->entry_list, &entry->elem);
-	// hex_dump_at_frame_table();
-
-	//lock_release(&ft->lock);
+	
+	lock_release_ft();
 	return true;
 }
 
@@ -101,54 +102,74 @@ frame_evict()
 	struct frame_entry *entry;
 	struct s_page_entry *page_entry;
 	struct sector_elem *sector_elem;
+	struct thread *t;
 	void *upage, *kpage;
 	uintptr_t idx;
 	int cnt = PGSIZE / BLOCK_SECTOR_SIZE, i;
-
-	lock_acquire(&ft->lock);
-
-	entry = list_entry(list_pop_front (&ft->entry_list), struct frame_entry, elem);
-	entry->in_use = false;
-
-	upage = entry->upage;
 	
-	idx = ((uintptr_t)entry - (uintptr_t)(ft->base)) / sizeof(struct frame_entry);
-	kpage = user_pool_base + idx * PGSIZE;
-	
-	//hex_dump_at_user_pool_base();
-
-	page_entry = page_lookup(upage, entry->tid);
-
-	if (page_entry->file_p == NULL) {		
-		for (i = 0; i < cnt; i++){
-			sector_elem = malloc(sizeof(struct sector_elem));
-			sector_elem->sector = swap_out(kpage + i*BLOCK_SECTOR_SIZE);
-			list_push_back(&page_entry->sector_list, &sector_elem->list_elem);
-		}
+	lock_acquire_ft();
+	if (list_empty(&ft->entry_list)) {
+		lock_release_ft();
+		return palloc_get_page(PAL_USER);
 	}
 	else {
-		file_seek(page_entry->file_p, page_entry->page_idx * PGSIZE);
-		file_write(page_entry->file_p, page_entry->upage, page_entry->page_read_bytes);
-		file_seek(page_entry->file_p, 0);
+		entry = list_entry(list_pop_front (&ft->entry_list), struct frame_entry, elem);
+		lock_release_ft();
+		entry->in_use = false;
+	
+		upage = entry->upage;
+		
+		idx = ((uintptr_t)entry - (uintptr_t)(ft->base)) / sizeof(struct frame_entry);
+		kpage = user_pool_base + idx * PGSIZE;
+		
+		//hex_dump_at_user_pool_base();
+		t = find_thread(entry->tid);
+		page_entry = page_lookup(upage, entry->tid);
+	
+		if (page_entry->file_p == NULL || page_entry->mapping < 0) {		
+			for (i = 0; i < cnt; i++){
+				sector_elem = malloc(sizeof(struct sector_elem));
+				sector_elem->sector = swap_out(kpage + i*BLOCK_SECTOR_SIZE);
+				list_push_back(&page_entry->sector_list, &sector_elem->list_elem);
+			}
+		}
+		else {
+			file_seek(page_entry->file_p, page_entry->page_idx * PGSIZE);
+			file_write(page_entry->file_p, page_entry->upage, page_entry->page_read_bytes);
+			file_seek(page_entry->file_p, 0);
+		}
+		page_get_evicted(page_entry);
+		//hex_dump_at_user_pool_base();
+	
+		//printf("frame evict: tid %d upage %p kpage %p\n", entry->tid, upage, kpage);
+		return kpage;
 	}
-	page_get_evicted(page_entry);
-	//hex_dump_at_user_pool_base();
-	lock_release(&ft->lock);
-
-	//printf("frame evict: tid %d upage %p kpage %p\n", entry->tid, upage, kpage);
-	return kpage;
 }
 
 void
 remove_frame_entry (tid_t t, void *upage){
 	struct list_elem *e;
 	struct frame_entry *entry;
+	lock_acquire_ft();
 	for (e = list_begin(&ft->entry_list); e != list_end(&ft->entry_list); e = list_next(e)) {
 		entry = list_entry (e, struct frame_entry, elem);
 		if (entry->tid == t && (upage == NULL || entry->upage == upage)){
 			list_remove (&entry->elem);
 		}
 	}
+	lock_release_ft();
+}
+
+void
+lock_acquire_ft()
+{
+	lock_acquire(&ft->lock);
+}
+
+void
+lock_release_ft()
+{
+	lock_release(&ft->lock);
 }
 
 /* Helper function for debugging  */

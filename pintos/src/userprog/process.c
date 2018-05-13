@@ -19,10 +19,8 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#ifdef VM
 #include "vm/frame.h"
 #include "vm/page.h"
-#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -138,16 +136,19 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-#ifdef VM
+	//printf("thread %d destroy supplemental page table\n", thread_current()->tid);
 	pt = cur->s_pt;
-	remove_page_block_sector(pt);
 	if (pt != NULL)
 	{
 		cur->s_pt = NULL;
+		remove_page_block_sector(pt);
+
 		s_page_table_destroy (pt);
 	}
+			
+	//printf("thread %d modify frame table\n", thread_current()->tid);
   remove_frame_entry (cur->tid, NULL);
-#endif
+	//printf("thread %d destroy pagedir\n", thread_current()->tid);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -279,9 +280,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-#ifdef VM
 	t->s_pt = s_page_table_create();
-#endif
 	
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -483,7 +482,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
   file_seek (file, ofs);
-
+	
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -496,8 +495,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       uint8_t *kpage = palloc_get_page (PAL_USER);
 			if (kpage == NULL)
 				kpage = frame_evict();
-      if (kpage == NULL)
+      if (kpage == NULL) {
         return false;
+			}
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
@@ -506,13 +506,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
 			
 			memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
+			
       /* Add the page to the process's address space. */
+			lock_acquire_pagedir(NULL);
       if (!install_page (upage, kpage, writable)) 
         {
           palloc_free_page (kpage);
+					lock_release_pagedir(NULL);
           return false; 
         }
+			lock_release_pagedir(NULL);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -529,13 +532,14 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage == NULL)
 		kpage = frame_evict();
   if (kpage != NULL) 
     {
+			lock_acquire_pagedir(NULL);
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+			lock_release_pagedir(NULL);
       if (success)
         *esp = PHYS_BASE;
       else
@@ -557,9 +561,8 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-#ifdef VM
+	//printf("thread %d upage %p -> kpage %p\n", t->tid, upage, kpage);
 	set_frame_entry(upage, kpage);
-#endif
 
 	/* Verify that there's not already a page at that virtual
      address, then map our page there. */

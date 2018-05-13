@@ -40,7 +40,7 @@ void
 unmap_action (struct hash_elem *e, void *aux)
 {
 	struct s_page_entry *entry = hash_entry(e, struct s_page_entry, hash_elem);
-	if (entry->file_p != NULL) {
+	if (entry->file_p != NULL && entry->mapping >= 0) {
 		if (!entry->is_swapped) {
 			file_seek(entry->file_p, entry->page_idx * PGSIZE);
 			file_write(entry->file_p, entry->upage, entry->page_read_bytes);
@@ -66,9 +66,12 @@ page_insert (const void *vaddr, bool writable)
 	p->is_swapped = false;
 	list_init(&p->sector_list);
 	p->file_p = NULL;
+	p->mapping = -1;
 	p->writable = writable;
-
+	
+	lock_acquire_s_pt(NULL);
 	hash_insert((struct hash *)(thread_current()->s_pt), &p->hash_elem);
+	lock_release_s_pt(NULL);
 }
 
 bool
@@ -78,7 +81,6 @@ mmap_insert (const void *vaddr, bool writable, struct file *file_p, int mapping,
 		return false;
 
 	//printf("mmap insert: upage %p\n");
-
 	struct s_page_entry *p;
 
 	p = malloc(sizeof(struct s_page_entry));
@@ -94,7 +96,9 @@ mmap_insert (const void *vaddr, bool writable, struct file *file_p, int mapping,
 	p->page_read_bytes = page_read_bytes;
 	p->writable = writable;
 
+	lock_acquire_s_pt(NULL);
 	hash_insert((struct hash *)(thread_current()->s_pt), &p->hash_elem);
+	lock_release_s_pt(NULL);
 
 	return true;
 }
@@ -104,11 +108,15 @@ page_lookup (const void *vaddr, tid_t tid)
 {
 	if (pg_ofs(vaddr) != 0)
 		PANIC ("page_lookup: not page address");
+	struct thread *t = find_thread(tid);
 
 	struct s_page_entry p;
 	struct hash_elem *e;
 	p.upage = vaddr;
+
+	lock_acquire_s_pt(t);
 	e = hash_find ((struct hash *)(find_thread(tid)->s_pt), &p.hash_elem);
+	lock_release_s_pt(t);
 	return e != NULL ? hash_entry(e, struct s_page_entry, hash_elem) : NULL;
 }
 
@@ -121,7 +129,9 @@ page_get_evicted(struct s_page_entry * entry)
 	t = find_thread(entry->tid);
 	if (t == NULL)
 		PANIC("page_get_evicted: invalid tid");
+	lock_acquire_pagedir(t);
 	pagedir_clear_page(t->pagedir, entry->upage);
+	lock_release_pagedir(t);
 	//pagedir_set_dirty (t->pagedir, entry->upage, false);
 	//pagedir_set_accessed (t->pagedir, entry->upage, false);
 }
@@ -134,7 +144,9 @@ page_swap_in (struct s_page_entry * entry, void *kpage)
 		PANIC ("page_swap_in: kpage is null pointer");
 	
 	entry->is_swapped = false;
+	lock_acquire_pagedir(thread_current());
 	success =	pagedir_set_page(thread_current()->pagedir, entry->upage, kpage, entry->writable);
+	lock_release_pagedir(thread_current());
 	if (!success)
 		PANIC ("page_swap_in: pagedir_set_page failed!");
 }
@@ -152,7 +164,7 @@ remove_page_block_sector(struct hash *table)
 	while (e != NULL) {
 			entry = hash_entry(e, struct s_page_entry, hash_elem);
 
-			if (entry->is_swapped && entry->file_p == NULL){
+			if (entry->is_swapped && (entry->file_p == NULL || entry->mapping < 0)){
 				for (_e = list_begin(&entry->sector_list); _e != list_end(&entry->sector_list); _e = list_next(_e)){
 					remove_swap_entry(list_entry(_e, struct swap_entry, list_elem)->sector);
 				}
@@ -168,7 +180,8 @@ unmap (int mapping)
 	struct hash_elem *e;
 	struct hash_iterator itr;
 	struct s_page_entry *entry;
-
+	
+	lock_acquire_s_pt(thread_current());
 	hash_first(&itr, (struct hash *)thread_current()->s_pt);
 	e = itr.elem;
 
@@ -189,6 +202,42 @@ unmap (int mapping)
 		else
 			e = hash_next(&itr);
 	}
+	lock_release_s_pt(thread_current());
+}
+
+void
+lock_acquire_pagedir(struct thread *t)
+{
+	if (t == NULL)
+		lock_acquire(&thread_current()->lock_pagedir);
+	else
+		lock_acquire(&t->lock_pagedir);
+}
+
+void lock_release_pagedir(struct thread *t)
+{
+	if (t == NULL)
+		lock_release(&thread_current()->lock_pagedir);
+	else
+		lock_release(&t->lock_pagedir);
+}
+
+void
+lock_acquire_s_pt(struct thread *t)
+{
+	if (t == NULL)
+		lock_acquire(&thread_current()->lock_s_pt);
+	else
+		lock_acquire(&t->lock_s_pt);
+}
+
+void
+lock_release_s_pt(struct thread *t)
+{
+	if (t == NULL)
+		lock_release(&thread_current()->lock_s_pt);
+	else
+		lock_release(&t->lock_s_pt);
 }
 
 unsigned

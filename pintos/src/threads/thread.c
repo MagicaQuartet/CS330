@@ -301,16 +301,22 @@ thread_exit (void)
   ASSERT (!intr_context ());
 	struct list_elem *e, *temp;
 	struct thread *t;
-
+	//printf("thread %d exit start\n", thread_current()->tid);
 #ifdef USERPROG
+	//printf("thread %d process exit start\n", thread_current()->tid);
+
+	lock_acquire(&thread_current()->lock_s_pt);
+	lock_acquire(&thread_current()->lock_pagedir);
   process_exit ();
 #endif
 
+	//printf("thread %d process exit done\n", thread_current()->tid);
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-	
+		
+	//printf("thread %d Other things...\n", thread_current()->tid);
 	for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list); e = list_next(e)) {
 		t = list_entry(e, struct thread, child_elem);
 		sema_up(&t->sema_child_wait);
@@ -322,12 +328,18 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
 	list_remove (&thread_current()->child_elem);
 	sema_down(&thread_current()->sema_terminate);
+	//printf("thread %d close files\n", thread_current()->tid);
 	for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); ) {
 		temp = e;
 		e = list_remove(e);
 		file_close(list_entry(temp, struct file_info, elem)->file_p);
 		free(list_entry(temp, struct file_info, elem));
 	}
+//	printf("thread %d file closed\n", thread_current()->tid);
+
+	//printf("thread %d exit done\n", thread_current()->tid);
+	lock_release(&thread_current()->lock_s_pt);
+	lock_release(&thread_current()->lock_pagedir);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -508,6 +520,8 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->exec_status = false;
 	t->fd_cnt = 2;
 	t->mmap_id = 0;
+	lock_init(&t->lock_pagedir);
+	lock_init(&t->lock_s_pt);
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }

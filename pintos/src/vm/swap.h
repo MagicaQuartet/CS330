@@ -12,3 +12,6 @@ void swap_table_init(void);
 block_sector_t swap_out (void *);
 void swap_in (struct s_page_entry *, void *);
 void remove_swap_entry (block_sector_t);
+
+void lock_acquire_sw(void);
+void lock_release_sw(void);

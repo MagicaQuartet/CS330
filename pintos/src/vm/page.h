@@ -41,3 +41,9 @@ void page_get_evicted(struct s_page_entry *);
 
 bool mmap_insert (const void *, bool, struct file *, int, size_t, size_t);
 void unmap(int);
+
+void lock_acquire_pagedir(struct thread *);
+void lock_release_pagedir(struct thread *);
+
+void lock_acquire_s_pt(struct thread *);
+void lock_release_s_pt(struct thread *);

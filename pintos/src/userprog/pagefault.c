@@ -17,6 +17,7 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 {
 	//printf("page fault: tid %d fault addr %p\n", thread_current()->tid, fault_addr);
 #ifdef VM
+
 	if (!is_user_vaddr (fault_addr) || fault_addr == NULL || !not_present) {
 #endif
 		bad_exit(f);
@@ -29,7 +30,7 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 		fault_page = pg_round_down(fault_addr);
 		
 		s_pte = page_lookup (fault_page, thread_current()->tid);
-
+		
 		if (s_pte != NULL) {													// Swapped
 			if (s_pte->is_swapped){
 				//printf("Let's swap in\n");
@@ -47,7 +48,7 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 			}
 			
 			while (pagedir_get_page (t->pagedir, fault_page) == NULL && page_lookup(fault_page, thread_current()->tid) == NULL) {
-
+				
 				kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 	
 				if (kpage == NULL){
@@ -65,8 +66,8 @@ page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, b
 					PANIC ("page_fault_handler: upage is already mapped");
 				}
 	
-				page_insert (fault_page, true);
-
+				//page_insert (fault_page, true);
+				//printf("thread %d upage %p -> kpage %p\n", thread_current()->tid, fault_page, kpage);
 				fault_page += PGSIZE;
 			}
 		}

@@ -117,10 +117,12 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
-#ifdef VM
 		uint32_t *s_pt;
 		int mmap_id;
-#endif
+		
+		struct lock lock_pagedir;
+		struct lock lock_s_pt;
+
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

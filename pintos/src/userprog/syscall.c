@@ -28,13 +28,14 @@ bool is_valid_uaddr (void *);
 bool is_in_uspace (void *);
 bool is_mapped_uaddr (void *);
 
-struct lock io_lock;
+struct lock lock;
+struct intr_frame *_f;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-	lock_init(&io_lock);
+	lock_init(&lock);
 }
 
 static void
@@ -42,6 +43,7 @@ syscall_handler (struct intr_frame *f)
 {
 	void * p = f->esp;
 	int syscall = -1, temp;
+	_f = f;
 
 	if (is_valid_uaddr(p)){
 		syscall = *(int *)p;
@@ -66,7 +68,6 @@ syscall_handler (struct intr_frame *f)
 			if (thread_current()->pagedir != NULL) {
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
 				thread_current()->exit_status = *(int *)p;
-#include "threads/synch.h"
 				f->eax = *(int *)p;
 			}
 			thread_exit();
@@ -74,7 +75,9 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXEC:
 			if (is_valid_uaddr (*(void **)p)) {
+				lock_acquire(&lock);
 				f->eax =  process_execute (*(char **)p);
+				lock_release(&lock);
 			}
 			else {
 				bad_exit(f);
@@ -87,7 +90,9 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CREATE:
 			if (is_valid_uaddr (*(void **)p)) {
+				lock_acquire(&lock);
 				f->eax = filesys_create (*(char **)p, *(off_t *)(p+sizeof(char **)));
+				lock_release(&lock);
 			}
 			else {
 				bad_exit(f);
@@ -105,7 +110,9 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_OPEN:
 			if (is_valid_uaddr (*(void **)p)) {
+				lock_acquire(&lock);
 				temp = open_handler(*(char **)p);
+				lock_release(&lock);
 				//printf(">>>open: return %d<<<\n", temp);
 				if (temp == 0 || temp == 1) {
 					bad_exit(f);
@@ -128,12 +135,12 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_READ:
-			lock_acquire(&io_lock);
 			if (*(int *)p != 1) {
 				if (is_valid_uaddr (*(void **)(p+sizeof(int))) && is_valid_uaddr ((void *)(p+sizeof(int)+sizeof(void *)))) {
+					lock_acquire(&lock);
 						temp = read_handler (*(int *)p, *(void **)(p+sizeof(int)), *(unsigned *)(p+sizeof(int)+sizeof(void *)));
+						lock_release(&lock);
 						if (temp == -1) {
-							lock_release(&io_lock);
 							bad_exit(f);
 						}
 						else {
@@ -141,21 +148,16 @@ syscall_handler (struct intr_frame *f)
 						}
 				}
 				else {
-					lock_release(&io_lock);
 					bad_exit(f);
 				}
 			}
 			else {
-				lock_release(&io_lock);
 				bad_exit(f);
 			}
-			lock_release(&io_lock);
 			break;
 
 		case SYS_WRITE:
-			lock_acquire(&io_lock);
 			if (*(int *)p == 0) {
-				lock_release(&io_lock);
 				bad_exit(f);
 			}
 			else if (*(int *)p == 1) {
@@ -165,15 +167,15 @@ syscall_handler (struct intr_frame *f)
 					f->eax = *(size_t *)(p+sizeof(char*));
 				}
 				else {
-					lock_release(&io_lock);
 					bad_exit(f);
 				}
 			}
 			else {
 				if (is_valid_uaddr ((void *)(p+sizeof(int))) && is_valid_uaddr (*(void **)(p+sizeof(int))) && is_valid_uaddr ((void *)(p+sizeof(int)+sizeof(void *)))) {
+					lock_acquire(&lock);
 					temp = write_handler (*(int *)p, *(void **)(p+sizeof(int)), *(unsigned *)(p+sizeof(int)+sizeof(void*)));
+					lock_release(&lock);
 					if (temp == -1) {
-						lock_release(&io_lock);
 						bad_exit(f);
 					}
 					else {
@@ -181,11 +183,9 @@ syscall_handler (struct intr_frame *f)
 					}
 				}
 				else{
-					lock_release(&io_lock);
 					bad_exit(f);
 				}
 			}
-			lock_release(&io_lock);
 			break;
 
 		case SYS_SEEK:
@@ -209,7 +209,6 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_MMAP:
 			//printf("MMAP: GOT IT!\n");
-			lock_acquire(&io_lock);
 			if (*(int *)p < 2 || !is_in_uspace(*(void **)(p+sizeof(int))) || (*(void **)(p+sizeof(int))) == NULL || pg_ofs(*(void **)(p+sizeof(int))) != 0){
 				f->eax = -1;
 			}
@@ -222,7 +221,6 @@ syscall_handler (struct intr_frame *f)
 					f->eax = -1;
 				}
 			}
-			lock_release(&io_lock);
 			break;
 
 		case SYS_MUNMAP:
@@ -258,10 +256,12 @@ open_handler(const char *name)
 		if (strcmp(name, thread_current()->name) == 0){
 			file_deny_write(f);
 		}
+		//printf("thread %d file %s fd %d\n", thread_current()->tid, name, finfo->fd);
 		return finfo->fd;
 	}
 	else {
 		free(finfo);
+		//printf("thread %d file %s failed\n", thread_current()->tid, name);
 		return -1;
 	}
 }
@@ -286,7 +286,7 @@ read_handler (int fd, void *buffer, unsigned size)
 	unsigned _size = size;
 	void *p = buffer;
 	struct file_info *finfo;
-	int result;
+	int result = 0;
 
 	if (fd == 0) {
 		while (_size-- > 0) {
@@ -299,8 +299,15 @@ read_handler (int fd, void *buffer, unsigned size)
 		return size;
 	}
 	else {
+		int pages = DIV_ROUND_UP(size + 1, PGSIZE), i;
 		finfo = find_opened_file_info(fd, thread_current());
 		if (finfo != NULL) {
+			for (i = 0; i < pages ; i++) {
+//				printf("buffer %p\n", buffer + i*PGSIZE);
+				if (pagedir_get_page(thread_current()->pagedir, buffer + i*PGSIZE) == NULL) {
+					page_fault_handler (_f, true, false, true, buffer + i*PGSIZE);
+				}
+			}
 			result = file_read(finfo->file_p, buffer, size);
 			return result;
 		}
@@ -313,10 +320,15 @@ int
 write_handler (int fd, const void *buffer, unsigned size)
 {
 	struct file_info *finfo;
+	int pages = DIV_ROUND_UP(size + 1, PGSIZE), i;
 	int result;
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
+		for (i = 0; i < pages; i++) {
+			if (pagedir_get_page(thread_current()->pagedir, buffer + i*PGSIZE) == NULL)
+				page_fault_handler (_f, true, true, true, buffer + i*PGSIZE);
+		}
 		result = file_write (finfo->file_p, buffer, size);
 		return result;
 	}
@@ -357,7 +369,6 @@ close_handler(int fd)
 		//printf("close_handler done\n");
 		return true;
 	}
-
 	return false;
 }
 
@@ -384,7 +395,7 @@ mmap_handler(int fd, void * addr, int size)
 	
 		}
 		if (page_read_bytes == PGSIZE) {
-			if (!mmap_insert(addr + pages*PGSIZE, true, finfo->file_p, mapping, i, 0)) {
+			if (!mmap_insert(addr + pages*PGSIZE, true, file_reopen(finfo->file_p), mapping, i, 0)) {
 				return -1;
 			}
 		}
