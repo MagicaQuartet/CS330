@@ -216,7 +216,6 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_MMAP:
-			//printf("MMAP: GOT IT!\n");
 			if (*(int *)p < 2 || !is_in_uspace(*(void **)(p+sizeof(int))) || (*(void **)(p+sizeof(int))) == NULL || pg_ofs(*(void **)(p+sizeof(int))) != 0){
 				f->eax = -1;
 			}
@@ -248,28 +247,23 @@ open_handler(const char *name)
 {
 	struct file_info *finfo = (struct file_info *)malloc(sizeof(struct file_info));
 	struct file *f;
-	//printf("come to open_handler");
+	
 	if (finfo == NULL) {
 		printf("open_handler: malloc failed!\n");
 	}
-	//printf(">>>file name: %s<<<\n", name);
 
 	f = filesys_open(name);
-	//printf(">>>f %p<<<\n", f);
 	if (f != NULL) {
-		//printf("?? filesys open ok");
 		finfo->fd = (thread_current()->fd_cnt)++;
 		finfo->file_p = f;
 		list_push_back (&thread_current()->file_list, &finfo->elem);
 		if (strcmp(name, thread_current()->name) == 0){
 			file_deny_write(f);
 		}
-		//printf("thread %d file %s fd %d\n", thread_current()->tid, name, finfo->fd);
 		return finfo->fd;
 	}
 	else {
 		free(finfo);
-		//printf("thread %d file %s failed\n", thread_current()->tid, name);
 		return -1;
 	}
 }
@@ -311,7 +305,6 @@ read_handler (int fd, void *buffer, unsigned size)
 		finfo = find_opened_file_info(fd, thread_current());
 		if (finfo != NULL) {
 			for (i = 0; i < pages ; i++) {
-//				printf("buffer %p\n", buffer + i*PGSIZE);
 				if (pagedir_get_page(thread_current()->pagedir, buffer + i*PGSIZE) == NULL) {
 					page_fault_handler (_f, true, false, true, buffer + i*PGSIZE);
 				}
@@ -366,15 +359,11 @@ bool
 close_handler(int fd)
 {
 	struct file_info *finfo;
-	//printf("close_handler start\n");
 	finfo = find_opened_file_info(fd, thread_current());
-	//printf("finfo %p\n", finfo);
 	if (finfo != NULL) {
-		//printf("close: GOT IT!\n");
 		file_close(finfo->file_p);
 		list_remove (&finfo->elem);
 		free(finfo);
-		//printf("close_handler done\n");
 		return true;
 	}
 	return false;
@@ -410,8 +399,6 @@ mmap_handler(int fd, void * addr, int size)
 	
 		(thread_current()->mmap_id)++;
 	
-	//	printf("mmap_hander: done %p\n", addr);
-		//printf("mmap_handler done\n");
 		return mapping;
 	}
 	else
@@ -448,7 +435,6 @@ find_opened_file_info(int fd, struct thread *t)
 	for (e = list_begin(&t->file_list); e != list_end(&t->file_list); e = list_next(e)) {
 		finfo = list_entry(e, struct file_info, elem);
 		if (finfo->fd == fd) {
-			//printf("finfo %p\n", finfo);
 			return finfo;
 		}
 	}

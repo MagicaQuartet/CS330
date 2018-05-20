@@ -129,11 +129,9 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
-#ifdef VM
 	/* Initialize virtual memory part */
 	frame_table_init(user_page_limit);
 	swap_table_init();
-#endif
 
   printf ("Boot complete.\n");
   
