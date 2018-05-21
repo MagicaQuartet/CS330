@@ -31,7 +31,7 @@ struct buffer_cache *cache;
 void cache_destroyer (struct hash_elem *, void *);
 unsigned cache_hash (const struct hash_elem *, void *);
 bool cache_less (const struct hash_elem *, const struct hash_elem *, void *);
-
+void cache_delete (int sector_idx);
 void
 cache_init()
 {
@@ -121,6 +121,7 @@ cache_write (void *p, void *buffer, off_t sector_ofs, int chunk_size)
 {
 	struct cache_entry *entry = (struct cache_entry *)p;
 	memcpy (entry->data + sector_ofs, buffer, chunk_size);
+	//hex_dump (entry->data + sector_ofs, entry->data + sector_ofs, chunk_size, true);
 }
 
 unsigned
@@ -139,6 +140,20 @@ cache_less (const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	return a_->sector_idx < b_->sector_idx;
 }
 
+void
+cache_delete (int sector_idx)
+{
+	//printf("come to cache_delete\n");
+	struct cache_entry *e;
+	e = cache_find (sector_idx);
+	hex_dump (e->data, e->data, 40, true);
+	block_write (fs_device, e->sector_idx, e->data);
+	hash_delete (cache->hash, &e->hash_elem);
+	free (e->data);
+	free (e);
+	cache->cnt--;
+	//printf("end of cache_delete\n");
+}
 //void
 //cache_lock_acquire ()
 //{

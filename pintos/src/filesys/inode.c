@@ -57,7 +57,7 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length) {
+  if (pos < ROUND_UP(inode->data.length, BLOCK_SECTOR_SIZE)) {
 		int i;
 		struct list_elem *e = list_front(inode->data.sector_list);
 		for (i = 0; i < pos / BLOCK_SECTOR_SIZE; i++) {
@@ -200,19 +200,31 @@ inode_close (struct inode *inode)
 			struct list_elem *e;
       /* Remove from inode list and release lock. */
       list_remove (&inode->elem);
+      //printf("close and write\n");
 			block_write (fs_device, inode->sector, &inode->data);
+      //hex_dump (&inode->data, &inode->data, 50, true);
       /* Deallocate blocks if removed. */
+      /*for (e = list_begin(inode->data.sector_list); e != list_end(inode->data.sector_list); e = list_next(e)) {
+        printf("here?\n");
+        struct inode_disk_elem *elem = list_entry(e, struct inode_disk_elem, list_elem);
+        if (cache_find (elem->sector)) {
+          printf("what is problem?\n");
+          cache_delete (elem->sector);
+        }
+      }*/
       if (inode->removed) 
         {
+          //printf("????\n");
           free_map_release (inode->sector, 1);
 					for (e = list_begin(inode->data.sector_list); e != list_end(inode->data.sector_list); e = list_next(e)) {
 						struct inode_disk_elem *elem = list_entry(e, struct inode_disk_elem, list_elem);
 						free_map_release (elem->sector, 1);
 					}
         }
-
+      //printf("come until here?\n");
       free (inode); 
     }
+
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -300,6 +312,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 			int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 			
 			if (sector_idx == -1) {
+        //printf("come to extend?\n");
 				sector_idx = inode_extend(inode);
 			}
 
