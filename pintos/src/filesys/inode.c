@@ -47,7 +47,7 @@ struct inode
     struct inode_disk data;             /* Inode content. */
   };
 
-block_sector_t inode_extend(struct inode *);
+block_sector_t inode_extend(struct inode *, int);
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -57,11 +57,13 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < ROUND_UP(inode->data.length, BLOCK_SECTOR_SIZE)) {
+  if (pos < inode->data.length) {
 		int i;
 		struct list_elem *e = list_front(inode->data.sector_list);
 		for (i = 0; i < pos / BLOCK_SECTOR_SIZE; i++) {
 			e = list_next(e);
+			if (e == list_end(inode->data.sector_list))
+				return -1;
 		}
 
     return list_entry(e, struct inode_disk_elem, list_elem)->sector;
@@ -198,30 +200,21 @@ inode_close (struct inode *inode)
   if (--inode->open_cnt == 0)
     {
 			struct list_elem *e;
-      /* Remove from inode list and release lock. */
+      
+			/* Remove from inode list and release lock. */
       list_remove (&inode->elem);
-      //printf("close and write\n");
+		
 			block_write (fs_device, inode->sector, &inode->data);
-      //hex_dump (&inode->data, &inode->data, 50, true);
-      /* Deallocate blocks if removed. */
-      /*for (e = list_begin(inode->data.sector_list); e != list_end(inode->data.sector_list); e = list_next(e)) {
-        printf("here?\n");
-        struct inode_disk_elem *elem = list_entry(e, struct inode_disk_elem, list_elem);
-        if (cache_find (elem->sector)) {
-          printf("what is problem?\n");
-          cache_delete (elem->sector);
-        }
-      }*/
+      
+			/* Deallocate blocks if removed. */
       if (inode->removed) 
         {
-          //printf("????\n");
           free_map_release (inode->sector, 1);
 					for (e = list_begin(inode->data.sector_list); e != list_end(inode->data.sector_list); e = list_next(e)) {
 						struct inode_disk_elem *elem = list_entry(e, struct inode_disk_elem, list_elem);
 						free_map_release (elem->sector, 1);
 					}
         }
-      //printf("come until here?\n");
       free (inode); 
     }
 
@@ -296,7 +289,6 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-	//printf("inode_write_at: inode %p, buffer %p, size %d, offset %d\n", inode, buffer_, size, offset);
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
 
@@ -306,14 +298,24 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 	//cache_lock_acquire();
   while (size > 0) 
     {
-			//printf("inode length: %d\n", inode_length(inode));
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
 			int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 			
 			if (sector_idx == -1) {
-        //printf("come to extend?\n");
-				sector_idx = inode_extend(inode);
+				int cnt;
+				if (inode_length(inode) % BLOCK_SECTOR_SIZE == 0) {
+					cnt = (offset - inode_length(inode)) / BLOCK_SECTOR_SIZE + 1;
+				}
+				else {
+					cnt = offset / BLOCK_SECTOR_SIZE - inode_length(inode) / BLOCK_SECTOR_SIZE;
+				}
+				
+				if (cnt > 0)
+					sector_idx = inode_extend(inode, cnt);
+				else {
+					sector_idx = list_entry(list_back(inode->data.sector_list), struct inode_disk_elem, list_elem)->sector;
+				}
 			}
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -324,10 +326,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       /* Number of bytes to actually write into this sector. */
       int chunk_size = size < min_left ? size : min_left;
 			if (inode_left <= 0) {
-				inode->data.length += chunk_size;
-				//printf("now inode length is %d\n", inode_length(inode));
+				inode->data.length += chunk_size - inode_left;
 			}
-			//printf("inode_left %d, sector_left %d, min_left %d, chunk_size %d\n", inode_left, sector_left, min_left, chunk_size);
       if (chunk_size <= 0)
         break;
 
@@ -375,18 +375,22 @@ inode_length (const struct inode *inode)
 }
 
 block_sector_t
-inode_extend (struct inode *inode)
+inode_extend (struct inode *inode, int cnt)
 {
-	struct inode_disk_elem *elem = malloc(sizeof(struct inode_disk_elem));
-	ASSERT (elem != NULL);
+	struct inode_disk_elem *elem;
+	static char zeros[BLOCK_SECTOR_SIZE];
+	int i;
 
-	if (free_map_allocate (1, &elem->sector)) {
-		static char zeros[BLOCK_SECTOR_SIZE];
-		block_write (fs_device, elem->sector, zeros);
-		list_push_back (inode->data.sector_list, &elem->list_elem);
-
-		return elem->sector;
+	for (i = 0; i < cnt; i++) {
+		elem = malloc(sizeof(struct inode_disk_elem));
+		ASSERT (elem != NULL);
+		if (free_map_allocate (1, &elem->sector)) {
+			block_write (fs_device, elem->sector, zeros);
+			list_push_back (inode->data.sector_list, &elem->list_elem);	
+		}
+		else
+			return -1;
 	}
-	else
-		return -1;
+	
+	return elem->sector;
 }

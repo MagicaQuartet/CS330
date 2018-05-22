@@ -249,7 +249,6 @@ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
-static bool load_segment_lazy (struct file *file, off_t ofs, uint8_t *upage, uint32_t page_read_bytes, uint32_t page_zero_bytes, bool writable, char *file_name);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -494,9 +493,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
-			if (kpage == NULL)
+			lock_acquire_ft();
+			if (kpage == NULL){
 				kpage = frame_evict();
+			}
       if (kpage == NULL) {
+				lock_release_ft();
         return false;
 			}
       /* Load this page. */
@@ -514,36 +516,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         {
           palloc_free_page (kpage);
 					lock_release_pagedir(NULL);
+					lock_release_ft();
           return false; 
         }
 			lock_release_pagedir(NULL);
+			lock_release_ft();
 
       /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-    }
-  return true;
-}
-
-static bool
-load_segment_lazy (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable, char *file_name) 
-{
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
-  file_seek (file, ofs);
-  
-  while (read_bytes > 0 || zero_bytes > 0) 
-    {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-      page_insert_lazyfile (file, ofs, *upage, page_read_bytes, page_zero_bytes, writable, *file_name);
-
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
@@ -559,8 +538,10 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	if (kpage == NULL)
+	lock_acquire_ft();
+	if (kpage == NULL) {
 		kpage = frame_evict();
+	}
   if (kpage != NULL) 
     {
 			lock_acquire_pagedir(NULL);
@@ -571,6 +552,7 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+	lock_release_ft();
   return success;
 }
 

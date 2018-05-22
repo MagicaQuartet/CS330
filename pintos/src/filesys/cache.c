@@ -82,13 +82,12 @@ cache_insert (int sector_idx)
 
 	if (cache->cnt >= CACHE_MAX) {
 		struct cache_entry *victim = list_entry(list_pop_front(&cache->list), struct cache_entry, list_elem);
-		block_write(fs_device, victim->sector_idx, victim->data);
+//		block_write(fs_device, victim->sector_idx, victim->data);
 		hash_delete (cache->hash, &victim->hash_elem);
 		free (victim->data);
 		free (victim);
 		cache->cnt--;
 	}
-
 	block_read (fs_device, sector_idx, entry->data);
 	list_push_back(&cache->list, &entry->list_elem);
 	hash_insert(cache->hash, &entry->hash_elem);
@@ -121,7 +120,9 @@ cache_write (void *p, void *buffer, off_t sector_ofs, int chunk_size)
 {
 	struct cache_entry *entry = (struct cache_entry *)p;
 	memcpy (entry->data + sector_ofs, buffer, chunk_size);
-	//hex_dump (entry->data + sector_ofs, entry->data + sector_ofs, chunk_size, true);
+	block_write (fs_device, entry->sector_idx, entry->data);
+	//printf("sector_idx %d\n", entry->sector_idx);
+	//hex_dump(0, entry->data, 75, true);
 }
 
 unsigned
@@ -143,16 +144,16 @@ cache_less (const struct hash_elem *a, const struct hash_elem *b, void *aux)
 void
 cache_delete (int sector_idx)
 {
-	//printf("come to cache_delete\n");
 	struct cache_entry *e;
 	e = cache_find (sector_idx);
-	hex_dump (e->data, e->data, 40, true);
-	block_write (fs_device, e->sector_idx, e->data);
-	hash_delete (cache->hash, &e->hash_elem);
-	free (e->data);
-	free (e);
-	cache->cnt--;
-	//printf("end of cache_delete\n");
+	if (e != NULL) {
+		//hex_dump (e->data, e->data, 40, true);
+		block_write (fs_device, e->sector_idx, e->data);
+		hash_delete (cache->hash, &e->hash_elem);
+		free (e->data);
+		free (e);
+		cache->cnt--;
+	}
 }
 //void
 //cache_lock_acquire ()
