@@ -12,6 +12,7 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
 #include <string.h>
 #include "vm/page.h"
 
@@ -51,8 +52,6 @@ syscall_handler (struct intr_frame *f)
 	else{
 		bad_exit(f);
 	}
-
-	//printf("syscall %d\n", syscall);
 
 	p += sizeof(int);
 	if (!is_valid_uaddr(p)){
@@ -234,6 +233,20 @@ syscall_handler (struct intr_frame *f)
 			if (*(int *)p < thread_current()->mmap_id) {
 				unmap(*(int *)p);
 			}
+			break;
+
+		case SYS_CHDIR:
+			f->eax = dir_change_dir(*(char **)p);
+			break;
+
+		case SYS_MKDIR:
+			f->eax = dir_make_dir(*(char **)p);
+			break;
+
+		case SYS_READDIR:
+			break;
+
+		case SYS_INUMBER:
 			break;
 
 		default:

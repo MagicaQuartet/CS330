@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -19,10 +20,12 @@ struct dir_entry
     block_sector_t inode_sector;        /* Sector number of header. */
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
+		bool is_dir;
   };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
+
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
@@ -109,6 +112,8 @@ lookup (const struct dir *dir, const char *name,
         return true;
       }
   return false;
+
+
 }
 
 /* Searches DIR for a file with the given NAME
@@ -118,6 +123,8 @@ lookup (const struct dir *dir, const char *name,
 bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode) 
+
+
 {
   struct dir_entry e;
 
@@ -130,6 +137,8 @@ dir_lookup (const struct dir *dir, const char *name,
     *inode = NULL;
 
   return *inode != NULL;
+
+
 }
 
 /* Adds a file named NAME to DIR, which must not already contain a
@@ -139,7 +148,9 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is_dir)
+
+
 {
   struct dir_entry e;
   off_t ofs;
@@ -170,12 +181,15 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 
   /* Write slot. */
   e.in_use = true;
+	e.is_dir = is_dir;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
   return success;
+
+
 }
 
 /* Removes any entry for NAME in DIR.
@@ -183,6 +197,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
    which occurs only if there is no file with the given NAME. */
 bool
 dir_remove (struct dir *dir, const char *name) 
+
+
 {
   struct dir_entry e;
   struct inode *inode = NULL;
@@ -213,6 +229,8 @@ dir_remove (struct dir *dir, const char *name)
  done:
   inode_close (inode);
   return success;
+
+
 }
 
 /* Reads the next directory entry in DIR and stores the name in
@@ -220,6 +238,8 @@ dir_remove (struct dir *dir, const char *name)
    contains no more entries. */
 bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
+
+
 {
   struct dir_entry e;
 
@@ -233,4 +253,101 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+bool dir_is_relative (const char *);
+
+bool
+dir_change_dir (const char *dir)
+{
+	struct dir *directory;
+	struct inode *inode;
+	bool is_relative;
+	char *token, *save_ptr;
+	
+	if (strlen(dir) == 0)
+		return false;
+
+	is_relative = dir_is_relative(dir);
+
+	if (is_relative) {
+		directory = thread_current()->current_dir;
+	}
+	else {
+		directory = dir_open_root();
+	}
+
+	for (token = strtok_r (dir, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		if (!dir_lookup (directory, token, &inode)){
+			if (!strcmp (token, "."))
+				continue;
+			else
+				return false;
+		}
+		
+		if (!inode_is_dir(inode))
+			return false;
+		else {
+			directory = dir_open(inode);
+		}
+	}
+
+	thread_current()->current_dir = directory;
+	return true;
+}
+
+bool
+dir_make_dir (const char *dir)
+{
+	struct dir *directory;
+	struct inode *inode;
+	bool is_relative;
+	char *token, *save_ptr;
+
+	if (strlen(dir) == 0)
+		return false;
+
+	is_relative = dir_is_relative(dir);
+	if (is_relative) {
+		directory = thread_current()->current_dir;
+	}
+	else {
+		directory = dir_open_root();
+	}
+
+		for (token = strtok_r (dir, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		if (!dir_lookup (directory, token, &inode)) {	
+			if (!strcmp (token, "."))
+				continue;
+			else {
+				if (strtok_r(NULL, "/", &save_ptr) != NULL)
+					return false;
+				else {
+					block_sector_t sector;
+	
+					if (free_map_allocate(1, &sector)) {
+						dir_create (sector, 16);
+						dir_add (directory, token, sector, true);
+						return true;
+					}
+					else
+						return false;
+				}
+			}
+		}
+		
+		if (!inode_is_dir(inode))
+			return false;
+		else {
+			directory = dir_open(inode);
+		}
+	}
+
+	return false;
+}
+
+bool
+dir_is_relative (const char *dir)
+{
+	return (dir[0] != '/');
 }

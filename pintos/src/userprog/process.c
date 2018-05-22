@@ -58,6 +58,7 @@ process_execute (const char *file_name)
 	}
 
 	t = find_child_thread(&thread_current()->child_list, tid);
+	t->current_dir = dir_reopen(thread_current()->current_dir);
 	sema_up(&t->sema_child_list);
 	sema_down(&t->sema_load);
 	if (!t->exec_status) {

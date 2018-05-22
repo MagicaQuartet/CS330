@@ -35,6 +35,7 @@
 #include "devices/block.h"
 #include "devices/ide.h"
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
 #include "filesys/fsutil.h"
 #endif
 #include "vm/frame.h"
@@ -127,6 +128,7 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+	thread_current()->current_dir = dir_open_root();
 #endif
 
 	/* Initialize virtual memory part */
