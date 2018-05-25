@@ -16,10 +16,12 @@
 struct inode_disk
   {
 		//struct lock sector_lock;
-    struct list *sector_list;            /* First data sector. */
+    struct list *sector_list;           /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+		uint32_t is_dir;										/* 0: ordinary file, 1: directory */
+		void *parent;												/* INODE of parent directory */
+    uint32_t unused[123];               /* Not used. */
   };
 
 struct inode_disk_elem
@@ -58,6 +60,7 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
+//	printf("byte_to_sector pos %d, length %d\n", pos, inode->data.length);
   if (pos < inode->data.length) {
 		int i;
 		struct list_elem *e = list_front(inode->data.sector_list);
@@ -90,7 +93,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, uint32_t is_dir, void *parent)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -110,7 +113,9 @@ inode_create (block_sector_t sector, off_t length)
 			list_init(disk_inode->sector_list);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
-
+			disk_inode->is_dir = is_dir;
+			disk_inode->parent = parent;
+			
 			for (i = 0; i < sectors; i++) {
 				struct inode_disk_elem *e = malloc(sizeof(struct inode_disk_elem));
 				ASSERT (e != NULL);
@@ -399,5 +404,18 @@ inode_extend (struct inode *inode, int cnt)
 bool
 inode_is_dir (struct inode *inode)
 {
-	return inode->is_dir;
+	return inode != NULL ? inode->data.is_dir == 1 : false;
+}
+
+bool
+inode_is_removed (struct inode *inode)
+{
+	return inode->removed;
+}
+
+void *
+inode_get_parent (struct inode *inode)
+{
+	ASSERT (inode_is_dir (inode));
+	return inode->data.parent;
 }

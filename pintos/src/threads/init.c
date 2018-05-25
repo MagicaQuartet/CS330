@@ -128,13 +128,11 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
-	thread_current()->current_dir = dir_open_root();
 #endif
 
 	/* Initialize virtual memory part */
 	frame_table_init(user_page_limit);
 	swap_table_init();
-
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */

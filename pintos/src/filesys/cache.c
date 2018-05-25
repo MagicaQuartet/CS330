@@ -122,7 +122,7 @@ cache_write (void *p, void *buffer, off_t sector_ofs, int chunk_size)
 	memcpy (entry->data + sector_ofs, buffer, chunk_size);
 	block_write (fs_device, entry->sector_idx, entry->data);
 	//printf("sector_idx %d\n", entry->sector_idx);
-	//hex_dump(0, entry->data, 75, true);
+	//hex_dump(0, entry->data, 0x30, true);
 }
 
 unsigned

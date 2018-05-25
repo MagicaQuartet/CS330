@@ -17,7 +17,7 @@ void bad_exit (struct intr_frame *f);
 void
 page_fault_handler (struct intr_frame *f, bool not_present, bool write UNUSED, bool user, void *fault_addr)
 {
-	//printf("page fault: tid %d fault addr %p\n", thread_current()->tid, fault_addr);
+//	printf("page fault: tid %d fault addr %p\n", thread_current()->tid, fault_addr);
 #ifdef VM
 
 	if (!is_user_vaddr (fault_addr) || fault_addr == NULL || !not_present) {

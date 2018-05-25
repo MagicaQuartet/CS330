@@ -2,14 +2,17 @@
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
-#include "filesys/file.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "threads/thread.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
+struct lock fs_lock;
 
 static void do_format (void);
 
@@ -25,6 +28,7 @@ filesys_init (bool format)
 	cache_init ();
   inode_init ();
   free_map_init ();
+	lock_init(&fs_lock);
 
   if (format) 
     do_format ();
@@ -47,16 +51,68 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
-                  && dir_add (dir, name, inode_sector, false));
-  if (!success && inode_sector != 0) 
-    free_map_release (inode_sector, 1);
-  dir_close (dir);
-  return success;
+	lock_acquire(&fs_lock);
+//  block_sector_t inode_sector = 0;
+//	struct dir *dir = dir_open_root();
+//	bool success = (dir != NULL
+//									&& free_map_allocate (1, &inode_sector)
+//									&& inode_create (inode_sector, initial_size, 0)
+//									&& dir_add (dir, name, inode_sector, false));
+	struct dir *dir;
+	struct inode *inode;
+	block_sector_t inode_sector = 0;
+	bool is_relative, success = false;
+	char *token, *save_ptr, *copy;
+
+	if (strlen(name) == 0) {
+		lock_release(&fs_lock);
+		return false;
+	}
+	//printf("filesys_create %s\n", name);
+	copy = malloc(sizeof(char) * (strlen(name) + 1));
+	memcpy(copy, name, strlen(name) + 1);
+
+	is_relative = (copy[0] != '/');
+
+	if (is_relative) {
+		dir = thread_current()->current_dir;
+	}
+	else {
+		dir = dir_open_root();
+	}
+
+	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		if (inode_is_removed(dir_get_inode(dir))) {
+			lock_release(&fs_lock);
+			return NULL;
+		}
+		if (!dir_lookup (dir, token, &inode)) {
+			if (!strcmp (token, "."))
+				continue;
+			else {
+				if (save_ptr[0] != '\0') {
+					break;
+				}
+				else {
+					success = (dir != NULL
+										&& free_map_allocate (1, &inode_sector)
+										&& inode_create (inode_sector, initial_size, 0, NULL)
+										&& dir_add (dir, token, inode_sector, false));
+					break;
+				}
+			}
+		}
+
+		if (!inode_is_dir(inode))
+			break;
+		else {
+			dir = dir_open(inode);
+		}
+	}
+
+	lock_release(&fs_lock);
+	free(copy);
+	return success;
 }
 
 /* Opens the file with the given NAME.
@@ -67,12 +123,72 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
+	lock_acquire(&fs_lock);
+//  struct dir *dir = dir_open_root();
+//  struct inode *inode = NULL;
 
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
+//	if (dir != NULL)
+//    dir_lookup (dir, name, &inode);
+//  dir_close (dir);
+	struct dir *dir, *prev_dir;
+	struct inode *inode;
+	bool is_relative;
+	char *token, *save_ptr, *copy;
+	
+	if (strlen(name) == 0) {
+		lock_release(&fs_lock);
+		return NULL;
+	}
+
+	copy = malloc(sizeof(char) * (strlen(name) + 1));
+	memcpy(copy, name, strlen(name) + 1);
+
+	is_relative = (copy[0] != '/');
+
+	if (is_relative) {
+		dir = thread_current()->current_dir;
+	}
+	else {
+		dir = dir_open_root();
+	}
+
+	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		if (inode_is_removed(dir_get_inode(dir))) {
+			lock_release(&fs_lock);
+			return NULL;
+		}
+		if (!dir_lookup (dir, token, &inode)) {
+			if (!strcmp (token, ".")) {
+				if (save_ptr[0] != '\0')
+					continue;
+				else {
+					inode = dir_get_inode(dir);
+					break;
+				}
+			}
+			else {
+				lock_release(&fs_lock);
+				free(copy);
+				return NULL;
+			}
+		}
+
+		if (!inode_is_dir(inode)) {
+			if (save_ptr[0] != '\0'){
+				lock_release(&fs_lock);
+				free(copy);
+				return NULL;
+			}
+			else {
+				break;
+			}
+		}
+		else {
+			dir = dir_open(inode);
+		}
+	}
+	lock_release(&fs_lock);
+	free(copy);
   return file_open (inode);
 }
 
@@ -83,12 +199,88 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+	lock_acquire(&fs_lock);
+//	struct dir *dir = dir_open_root ();
+//	bool success = dir != NULL && dir_remove (dir, name);
+	struct dir *dir;
+	struct inode *inode;
+	bool is_relative, success = false;
+	char *token, *save_ptr, *copy;
 
+	if (strlen(name) == 0) {
+		lock_release(&fs_lock);
+		return false;
+	}
+
+	copy = malloc(sizeof(char) * (strlen(name) + 1));
+	memcpy(copy, name, strlen(name) + 1);
+
+	is_relative = (copy[0] != '/');
+
+	if (is_relative) {
+		dir = thread_current()->current_dir;
+	}
+	else {
+		dir = dir_open_root();
+	}
+
+	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		if (!dir_lookup (dir, token, &inode)){
+			if (!strcmp (token, ".")){
+				continue;
+			}
+			else {
+				break;
+			}
+		}
+		
+		if (!inode_is_dir(inode)) {
+			if (save_ptr[0] != '\0') {
+				break;
+			}
+			else {
+				success = dir != NULL && dir_remove (dir, token);
+				break;
+			}
+		}
+		else {
+			if (save_ptr[0] != '\0')
+				dir = dir_open(inode);
+			else {
+				char temp[NAME_MAX + 1];
+				if (dir != NULL && !dir_readdir(dir_open (inode), temp))
+					success = dir_remove (dir, token);
+				break;
+			}
+		}
+	}
+	lock_release(&fs_lock);
+	free(copy);
   return success;
 }
+
+bool
+filesys_chdir (const char *name)
+{
+	bool success;
+	lock_acquire(&fs_lock);
+//	printf("chdir %s\n", name);
+	success = dir_change_dir (name);
+	lock_release(&fs_lock);
+	return success;
+}
+
+bool
+filesys_mkdir (const char *name)
+{
+	bool success;
+	lock_acquire(&fs_lock);
+	//printf("mkdir %s\n", name);
+	success = dir_make_dir (name);
+	lock_release(&fs_lock);
+	return success;
+}
+
 
 /* Formats the file system. */
 static void
@@ -96,8 +288,9 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, 16, NULL))
     PANIC ("root directory creation failed");
+	thread_current()->current_dir = dir_open_root();
   free_map_close ();
   printf ("done.\n");
 }

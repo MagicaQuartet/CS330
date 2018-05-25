@@ -12,7 +12,7 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
-#include "filesys/directory.h"
+#include "filesys/inode.h"
 #include <string.h>
 #include "vm/page.h"
 
@@ -25,6 +25,7 @@ void seek_handler (int, off_t);
 unsigned tell_handler (int);
 bool close_handler (int);
 int mmap_handler(int, void *, int);
+bool readdir_handler(int, char *);
 bool is_valid_uaddr (void *);
 bool is_in_uspace (void *);
 bool is_mapped_uaddr (void *);
@@ -70,7 +71,7 @@ syscall_handler (struct intr_frame *f)
 					temp = e;
 					e = list_remove(e);
 					file_close(list_entry(temp, struct file_info, elem)->file_p);
-					free(list_entry(temp, struct file_info, elem));
+					//free(list_entry(temp, struct file_info, elem));
 				}
 //	printf("thread %d file closed\n", thread_current()->tid);
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
@@ -236,17 +237,24 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_CHDIR:
-			f->eax = dir_change_dir(*(char **)p);
+			f->eax = filesys_chdir(*(char **)p);
 			break;
 
 		case SYS_MKDIR:
-			f->eax = dir_make_dir(*(char **)p);
+			f->eax = filesys_mkdir(*(char **)p);
 			break;
 
 		case SYS_READDIR:
+			// I did not check second argument yet
+			f->eax = readdir_handler(*(int *)p, *(char **)(p + sizeof(int)));
+			break;
+
+		case SYS_ISDIR:
+			f->eax = inode_is_dir(file_get_inode(find_opened_file_info(*(int *)p, thread_current())));
 			break;
 
 		case SYS_INUMBER:
+			f->eax = inode_get_inumber (file_get_inode(find_opened_file_info(*(int *)p, thread_current())));
 			break;
 
 		default:
@@ -269,6 +277,10 @@ open_handler(const char *name)
 	if (f != NULL) {
 		finfo->fd = (thread_current()->fd_cnt)++;
 		finfo->file_p = f;
+		if (inode_is_dir(file_get_inode(f)))
+			finfo->dir = dir_open(file_get_inode(f));
+		else
+			finfo->dir = NULL;
 		list_push_back (&thread_current()->file_list, &finfo->elem);
 		if (strcmp(name, thread_current()->name) == 0){
 			file_deny_write(f);
@@ -289,6 +301,8 @@ filesize_handler(int fd)
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
+		if (inode_is_dir(file_get_inode(finfo->file_p)))
+			return -1;
 		size = file_length(finfo->file_p);
 	}
 
@@ -317,6 +331,9 @@ read_handler (int fd, void *buffer, unsigned size)
 		int pages = DIV_ROUND_UP(size + 1, PGSIZE), i;
 		finfo = find_opened_file_info(fd, thread_current());
 		if (finfo != NULL) {
+			if (inode_is_dir(file_get_inode(finfo->file_p)))
+				return -1;
+
 			for (i = 0; i < pages ; i++) {
 				if (pagedir_get_page(thread_current()->pagedir, buffer + i*PGSIZE) == NULL) {
 					page_fault_handler (_f, true, false, true, buffer + i*PGSIZE);
@@ -339,6 +356,9 @@ write_handler (int fd, const void *buffer, unsigned size)
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
+		if (inode_is_dir(file_get_inode(finfo->file_p)))
+			return -1;
+
 		for (i = 0; i < pages; i++) {
 			if (pagedir_get_page(thread_current()->pagedir, buffer + i*PGSIZE) == NULL)
 				page_fault_handler (_f, true, true, true, buffer + i*PGSIZE);
@@ -394,6 +414,8 @@ mmap_handler(int fd, void * addr, int size)
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL){
+		if (inode_is_dir(file_get_inode(finfo->file_p)))
+			return -1;
 		for (i = 0; i < pages; i++) {
 			page_read_bytes = filesize < PGSIZE ? filesize : PGSIZE;
 			if (filesize > PGSIZE)
@@ -416,6 +438,18 @@ mmap_handler(int fd, void * addr, int size)
 	}
 	else
 		return -1;
+}
+
+bool
+readdir_handler (int fd, char *name)
+{
+	struct file_info *finfo;
+	finfo = find_opened_file_info (fd, thread_current());
+	if (finfo != NULL && finfo->dir != NULL) {
+		return dir_readdir(finfo->dir, name);
+	}
+	else
+		return false;
 }
 
 bool

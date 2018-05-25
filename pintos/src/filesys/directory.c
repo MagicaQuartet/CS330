@@ -4,6 +4,7 @@
 #include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
 
@@ -27,9 +28,9 @@ struct dir_entry
    given SECTOR.  Returns true if successful, false on failure. */
 
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+dir_create (block_sector_t sector, size_t entry_cnt, struct inode *inode)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1, sector == ROOT_DIR_SECTOR ? NULL : inode);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -42,7 +43,7 @@ dir_open (struct inode *inode)
     {
       dir->inode = inode;
       dir->pos = 0;
-      return dir;
+			return dir;
     }
   else
     {
@@ -65,7 +66,7 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir) 
 {
-  return dir_open (inode_reopen (dir->inode));
+	return dir_open (inode_reopen (dir->inode));
 }
 
 /* Destroys DIR and frees associated resources. */
@@ -123,8 +124,6 @@ lookup (const struct dir *dir, const char *name,
 bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode) 
-
-
 {
   struct dir_entry e;
 
@@ -166,8 +165,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
-
-  /* Set OFS to offset of free slot.
+  
+	/* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
      
@@ -185,7 +184,6 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-
  done:
   return success;
 
@@ -197,8 +195,6 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
    which occurs only if there is no file with the given NAME. */
 bool
 dir_remove (struct dir *dir, const char *name) 
-
-
 {
   struct dir_entry e;
   struct inode *inode = NULL;
@@ -238,8 +234,6 @@ dir_remove (struct dir *dir, const char *name)
    contains no more entries. */
 bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
-
-
 {
   struct dir_entry e;
 
@@ -260,15 +254,16 @@ bool dir_is_relative (const char *);
 bool
 dir_change_dir (const char *dir)
 {
-	struct dir *directory;
+	struct dir *directory, *prev_dir;
 	struct inode *inode;
 	bool is_relative;
-	char *token, *save_ptr;
-	
+	char *token, *save_ptr, *copy;
 	if (strlen(dir) == 0)
 		return false;
+	copy = malloc(sizeof(char) * (strlen(dir) + 1));
+	memcpy(copy, dir, strlen(dir) + 1);
 
-	is_relative = dir_is_relative(dir);
+	is_relative = dir_is_relative(copy);
 
 	if (is_relative) {
 		directory = thread_current()->current_dir;
@@ -277,37 +272,46 @@ dir_change_dir (const char *dir)
 		directory = dir_open_root();
 	}
 
-	for (token = strtok_r (dir, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)){
 			if (!strcmp (token, "."))
 				continue;
+			else if (!strcmp (token, "..")) {
+				directory = dir_open((struct inode *)inode_get_parent(dir_get_inode(directory)));
+				if (directory == NULL)
+					return false;
+				continue;
+			}
 			else
 				return false;
 		}
 		
-		if (!inode_is_dir(inode))
+		if (!inode_is_dir(inode)) {
 			return false;
+		}
 		else {
 			directory = dir_open(inode);
 		}
 	}
 
-	thread_current()->current_dir = directory;
+	thread_current()->current_dir = dir_reopen(directory);
 	return true;
 }
 
 bool
 dir_make_dir (const char *dir)
 {
-	struct dir *directory;
+	struct dir *directory, *prev_dir;
 	struct inode *inode;
 	bool is_relative;
-	char *token, *save_ptr;
-
+	char *token, *save_ptr, *copy;
 	if (strlen(dir) == 0)
 		return false;
-
-	is_relative = dir_is_relative(dir);
+	
+	copy = malloc(sizeof(char) * (strlen(dir) + 1));
+	memcpy(copy, dir, strlen(dir) + 1);
+	
+	is_relative = dir_is_relative(copy);
 	if (is_relative) {
 		directory = thread_current()->current_dir;
 	}
@@ -315,18 +319,18 @@ dir_make_dir (const char *dir)
 		directory = dir_open_root();
 	}
 
-		for (token = strtok_r (dir, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+		for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)) {	
 			if (!strcmp (token, "."))
 				continue;
 			else {
-				if (strtok_r(NULL, "/", &save_ptr) != NULL)
+				if (save_ptr[0] != '\0')
 					return false;
 				else {
 					block_sector_t sector;
 	
 					if (free_map_allocate(1, &sector)) {
-						dir_create (sector, 16);
+						dir_create (sector, 16, directory->inode);
 						dir_add (directory, token, sector, true);
 						return true;
 					}
@@ -342,7 +346,6 @@ dir_make_dir (const char *dir)
 			directory = dir_open(inode);
 		}
 	}
-
 	return false;
 }
 
