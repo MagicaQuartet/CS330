@@ -105,7 +105,7 @@ lookup (const struct dir *dir, const char *name,
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
     //printf("lookup : %s\n", e.name); 
-    hex_dump (0, &e, sizeof e, true);
+    //hex_dump (0, &e, sizeof e, true);
     if (e.in_use && !strcmp (name, e.name)) 
       {
         if (ep != NULL)
@@ -159,15 +159,12 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-  printf("come to dir_add : %s\n", name);
   /* Check NAME for validity. */
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
-  printf("???");
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
-  printf("come to dir_add\n");
 	/* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -179,14 +176,12 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
        ofs += sizeof e) 
     if (!e.in_use)
       break;
-  printf("come to dir_add\n");
   /* Write slot. */
   e.in_use = true;
 	e.is_dir = is_dir;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-  printf("dir_add : %d\n", success);
  done:
   return success;
 
