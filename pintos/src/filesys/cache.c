@@ -89,6 +89,8 @@ cache_insert (int sector_idx)
 		cache->cnt--;
 	}
 	block_read (fs_device, sector_idx, entry->data);
+	//printf("cache insert, what is in that sector? : %d\n", sector_idx);
+	//hex_dump (0, entry->data, BLOCK_SECTOR_SIZE, true);
 	list_push_back(&cache->list, &entry->list_elem);
 	hash_insert(cache->hash, &entry->hash_elem);
 	cache->cnt++;
@@ -113,6 +115,8 @@ cache_read (void *p, void *buffer, off_t sector_ofs, int chunk_size)
 {
 	struct cache_entry *entry = (struct cache_entry *)p;
 	memcpy (buffer, entry->data + sector_ofs, chunk_size);
+	//printf("cache_read : %p\n", entry->data + sector_ofs);
+	//hex_dump (0, entry->data + sector_ofs, chunk_size, true);
 }
 
 void

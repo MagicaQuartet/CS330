@@ -61,23 +61,25 @@ filesys_create (const char *name, off_t initial_size)
 	struct dir *dir;
 	struct inode *inode;
 	block_sector_t inode_sector = 0;
-	bool is_relative, success = false;
+	bool is_relative, success = false, tmp1, tmp2, tmp3;
 	char *token, *save_ptr, *copy;
 
 	if (strlen(name) == 0) {
 		lock_release(&fs_lock);
 		return false;
 	}
-	//printf("filesys_create %s\n", name);
+	printf("filesys_create %s, %d\n", name, initial_size);
 	copy = malloc(sizeof(char) * (strlen(name) + 1));
 	memcpy(copy, name, strlen(name) + 1);
 
 	is_relative = (copy[0] != '/');
 
 	if (is_relative) {
+    printf("relative\n");
 		dir = thread_current()->current_dir;
 	}
 	else {
+    printf("root\n");
 		dir = dir_open_root();
 	}
 
@@ -94,10 +96,18 @@ filesys_create (const char *name, off_t initial_size)
 					break;
 				}
 				else {
+          tmp1 = free_map_allocate (1, &inode_sector);
+          tmp2 = inode_create (inode_sector, initial_size, 0, NULL);
+          tmp3 = dir_add (dir, token, inode_sector, false);
+          printf("1 , 2, 3, %d, %d, %d\n", tmp1, tmp2, tmp3);
+          if (dir == NULL){
+            printf("dir is null");
+          }
+          printf ("name, sector num, is_dir : %s, %d, %d\n", token, inode_sector);
 					success = (dir != NULL
-										&& free_map_allocate (1, &inode_sector)
-										&& inode_create (inode_sector, initial_size, 0, NULL)
-										&& dir_add (dir, token, inode_sector, false));
+										&& tmp1
+										&& tmp2
+										&& tmp3);
 					break;
 				}
 			}
@@ -130,6 +140,7 @@ filesys_open (const char *name)
 //	if (dir != NULL)
 //    dir_lookup (dir, name, &inode);
 //  dir_close (dir);
+  printf("come to filesys_open : %s", name);
 	struct dir *dir, *prev_dir;
 	struct inode *inode;
 	bool is_relative;
@@ -147,17 +158,22 @@ filesys_open (const char *name)
 
 	if (is_relative) {
 		dir = thread_current()->current_dir;
+    if (dir == NULL){
+      printf("????");
+    }
 	}
 	else {
 		dir = dir_open_root();
 	}
-
+  printf("checking open1\n");
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (inode_is_removed(dir_get_inode(dir))) {
+      printf("checking open2\n");
 			lock_release(&fs_lock);
 			return NULL;
 		}
 		if (!dir_lookup (dir, token, &inode)) {
+      printf("checking open3 : %s\n", token);
 			if (!strcmp (token, ".")) {
 				if (save_ptr[0] != '\0')
 					continue;
@@ -172,7 +188,7 @@ filesys_open (const char *name)
 				return NULL;
 			}
 		}
-
+    printf("checking open4\n");
 		if (!inode_is_dir(inode)) {
 			if (save_ptr[0] != '\0'){
 				lock_release(&fs_lock);
@@ -189,6 +205,7 @@ filesys_open (const char *name)
 	}
 	lock_release(&fs_lock);
 	free(copy);
+  printf("come to file_open\n");
   return file_open (inode);
 }
 

@@ -24,5 +24,8 @@ void inode_write_behind(struct inode *);
 bool inode_is_dir (struct inode *);
 bool inode_is_removed (struct inode *);
 void * inode_get_parent(struct inode *);
+void inode_clear (struct inode *);
+void indirect_clear (block_sector_t, size_t);
+void double_indirect_clear (block_sector_t, size_t, size_t);
 
 #endif /* filesys/inode.h */
