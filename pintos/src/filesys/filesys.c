@@ -83,6 +83,7 @@ filesys_create (const char *name, off_t initial_size)
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (inode_is_removed(dir_get_inode(dir))) {
 			lock_release(&fs_lock);
+			free(copy);
 			return NULL;
 		}
 		if (!dir_lookup (dir, token, &inode)) {
@@ -162,6 +163,7 @@ filesys_open (const char *name)
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (inode_is_removed(dir_get_inode(dir))) {
 			lock_release(&fs_lock);
+			free(copy);
 			return NULL;
 		}
 		if (!dir_lookup (dir, token, &inode)) {
@@ -220,7 +222,7 @@ filesys_remove (const char *name)
 
 	copy = malloc(sizeof(char) * (strlen(name) + 1));
 	memcpy(copy, name, strlen(name) + 1);
-
+	
 	is_relative = (copy[0] != '/');
 
 	if (is_relative) {
@@ -254,8 +256,9 @@ filesys_remove (const char *name)
 				dir = dir_open(inode);
 			else {
 				char temp[NAME_MAX + 1];
-				if (dir != NULL && !dir_readdir(dir_open (inode), temp))
+				if (dir != NULL && !dir_readdir(dir_open (inode), temp)){
 					success = dir_remove (dir, token);
+				}
 				break;
 			}
 		}
