@@ -52,40 +52,38 @@ bool
 filesys_create (const char *name, off_t initial_size) 
 {
 	lock_acquire(&fs_lock);
-//  block_sector_t inode_sector = 0;
-//	struct dir *dir = dir_open_root();
-//	bool success = (dir != NULL
-//									&& free_map_allocate (1, &inode_sector)
-//									&& inode_create (inode_sector, initial_size, 0)
-//									&& dir_add (dir, name, inode_sector, false));
 	struct dir *dir;
 	struct inode *inode;
 	block_sector_t inode_sector = 0;
 	bool is_relative, success = false, tmp1, tmp2, tmp3;
 	char *token, *save_ptr, *copy;
-
 	if (strlen(name) == 0) {
 		lock_release(&fs_lock);
 		return false;
 	}
 	copy = malloc(sizeof(char) * (strlen(name) + 1));
 	memcpy(copy, name, strlen(name) + 1);
-
 	is_relative = (copy[0] != '/');
 
 	if (is_relative) {
 		dir = thread_current()->current_dir;
+		if (dir == NULL) {
+			thread_current()->current_dir = dir_open_root();
+			dir = thread_current()->current_dir;
+		}
 	}
 	else {
 		dir = dir_open_root();
 	}
-
+	
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
+
 		if (inode_is_removed(dir_get_inode(dir))) {
 			lock_release(&fs_lock);
 			free(copy);
 			return NULL;
 		}
+
 		if (!dir_lookup (dir, token, &inode)) {
 			if (!strcmp (token, "."))
 				continue;
@@ -97,9 +95,6 @@ filesys_create (const char *name, off_t initial_size)
           tmp1 = free_map_allocate (1, &inode_sector);
           tmp2 = inode_create (inode_sector, initial_size, 0, NULL);
           tmp3 = dir_add (dir, token, inode_sector, false);
-          if (dir == NULL){
-            //printf("dir is null");
-          }
 					success = (dir != NULL
 										&& tmp1
 										&& tmp2
@@ -109,9 +104,10 @@ filesys_create (const char *name, off_t initial_size)
 			}
 		}
 
-		if (!inode_is_dir(inode))
+		if (!inode_is_dir(inode)) {
 			break;
-		else {
+		}
+		else {	
 			dir = dir_open(inode);
 		}
 	}
@@ -130,13 +126,6 @@ struct file *
 filesys_open (const char *name)
 {
 	lock_acquire(&fs_lock);
-//  struct dir *dir = dir_open_root();
-//  struct inode *inode = NULL;
-
-//	if (dir != NULL)
-//    dir_lookup (dir, name, &inode);
-//  dir_close (dir);
-  //printf("come to filesys_open : %s", name);
 	struct dir *dir, *prev_dir;
 	struct inode *inode;
 	bool is_relative;
@@ -154,18 +143,24 @@ filesys_open (const char *name)
 
 	if (is_relative) {
 		dir = thread_current()->current_dir;
-    if (dir == NULL){
-    }
+		if (dir == NULL) {
+			thread_current()->current_dir = dir_open_root();
+			dir = thread_current()->current_dir;
+		}
 	}
 	else {
 		dir = dir_open_root();
 	}
+	
+
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (inode_is_removed(dir_get_inode(dir))) {
 			lock_release(&fs_lock);
 			free(copy);
+
 			return NULL;
 		}
+		
 		if (!dir_lookup (dir, token, &inode)) {
 			if (!strcmp (token, ".")) {
 				if (save_ptr[0] != '\0')
@@ -181,6 +176,7 @@ filesys_open (const char *name)
 				return NULL;
 			}
 		}
+		
 		if (!inode_is_dir(inode)) {
 			if (save_ptr[0] != '\0'){
 				lock_release(&fs_lock);
@@ -273,7 +269,6 @@ filesys_chdir (const char *name)
 {
 	bool success;
 	lock_acquire(&fs_lock);
-//	printf("chdir %s\n", name);
 	success = dir_change_dir (name);
 	lock_release(&fs_lock);
 	return success;
@@ -284,7 +279,6 @@ filesys_mkdir (const char *name)
 {
 	bool success;
 	lock_acquire(&fs_lock);
-	//printf("mkdir %s\n", name);
 	success = dir_make_dir (name);
 	lock_release(&fs_lock);
 	return success;

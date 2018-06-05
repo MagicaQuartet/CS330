@@ -58,6 +58,7 @@ syscall_handler (struct intr_frame *f)
 	if (!is_valid_uaddr(p)){
 		bad_exit(f);
 	}
+	
 	switch (syscall)
 	{
 		case SYS_HALT:
@@ -73,7 +74,6 @@ syscall_handler (struct intr_frame *f)
 					file_close(list_entry(temp, struct file_info, elem)->file_p);
 					//free(list_entry(temp, struct file_info, elem));
 				}
-//	printf("thread %d file closed\n", thread_current()->tid);
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
 				thread_current()->exit_status = *(int *)p;
 				f->eax = *(int *)p;
@@ -121,7 +121,6 @@ syscall_handler (struct intr_frame *f)
 				lock_acquire(&lock);
 				temp = open_handler(*(char **)p);
 				lock_release(&lock);
-				//printf(">>>open: return %d<<<\n", temp);
 				if (temp == 0 || temp == 1) {
 					bad_exit(f);
 				}
@@ -301,8 +300,6 @@ filesize_handler(int fd)
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
-		if (inode_is_dir(file_get_inode(finfo->file_p)))
-			return -1;
 		size = file_length(finfo->file_p);
 	}
 
@@ -396,7 +393,7 @@ close_handler(int fd)
 	if (finfo != NULL) {
 		file_close(finfo->file_p);
 		list_remove (&finfo->elem);
-		free(finfo);
+		//free(finfo);
 		return true;
 	}
 	return false;

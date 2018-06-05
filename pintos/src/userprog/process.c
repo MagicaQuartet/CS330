@@ -56,15 +56,13 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
 		free(token);
 	}
-
 	t = find_child_thread(&thread_current()->child_list, tid);
-	t->current_dir = dir_reopen(thread_current()->current_dir);
 	sema_up(&t->sema_child_list);
 	sema_down(&t->sema_load);
+	
 	if (!t->exec_status) {
 		tid = TID_ERROR;
 	}
-
   return tid;
 }
 
@@ -76,16 +74,17 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-	
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+	
   success = load (file_name, &if_.eip, &if_.esp);
 	thread_current()->exec_status = success;
 	sema_up(&thread_current()->sema_load);
 	sema_down(&thread_current()->sema_child_list);
+	
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -267,7 +266,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	char *token, *save_ptr;
 	void **tok_p_arr;
 	void *temp;
-
 	tok_p_arr = palloc_get_page (0);
 
 	token = strtok_r (file_name, " ", &save_ptr);
@@ -287,7 +285,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 	
@@ -409,6 +406,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
 	palloc_free_page (tok_p_arr);
   file_close (file);
+	
   return success;
 }
 
@@ -570,7 +568,6 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-	//printf("thread %d upage %p -> kpage %p\n", t->tid, upage, kpage);
 	set_frame_entry(upage, kpage);
 
 	/* Verify that there's not already a page at that virtual

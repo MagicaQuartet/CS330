@@ -13,6 +13,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -194,6 +195,14 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+	if (t->tid > 2) {
+		if (thread_current()->current_dir != NULL)
+			t->current_dir = dir_reopen(thread_current()->current_dir);
+		else
+			t->current_dir = dir_open_root();
+	}
+	else
+		t->current_dir = NULL;
 	list_push_back(&thread_current()->child_list, &t->child_elem);
 
   /* Prepare thread for first run by initializing its stack.
@@ -303,22 +312,18 @@ thread_exit (void)
   ASSERT (!intr_context ());
 	struct list_elem *e, *temp;
 	struct thread *t;
-	//printf("thread %d exit start\n", thread_current()->tid);	
 	lock_acquire(&thread_current()->lock_s_pt);
 	lock_acquire(&thread_current()->lock_pagedir);
 #ifdef USERPROG
-	//printf("thread %d process exit start\n", thread_current()->tid);
 
   process_exit ();
 #endif
 
-	//printf("thread %d process exit done\n", thread_current()->tid);
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
 		
-	//printf("thread %d Other things...\n", thread_current()->tid);
 	for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list); e = list_next(e)) {
 		t = list_entry(e, struct thread, child_elem);
 		sema_up(&t->sema_child_wait);
@@ -330,9 +335,7 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
 	list_remove (&thread_current()->child_elem);
 	sema_down(&thread_current()->sema_terminate);
-	//printf("thread %d close files\n", thread_current()->tid);
 
-	//printf("thread %d exit done\n", thread_current()->tid);
 
 	lock_release(&thread_current()->lock_s_pt);
 	lock_release(&thread_current()->lock_pagedir);
