@@ -217,6 +217,7 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
   /* Remove inode. */
   inode_remove (inode);
+  inode_close (inode);
   success = true;
 
  done:

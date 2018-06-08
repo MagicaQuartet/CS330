@@ -58,7 +58,7 @@ filesys_create (const char *name, off_t initial_size)
 	bool is_relative, success = false, tmp1, tmp2, tmp3;
 	char *token, *save_ptr, *copy;
 
-	printf("filesys_create: create file %s (size %d)\n", name, initial_size);
+	//printf("filesys_create: create file %s (size %d)\n", name, initial_size);
 
 	if (strlen(name) == 0) {
 		lock_release(&fs_lock);
