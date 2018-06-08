@@ -1,7 +1,6 @@
 #include "filesys/directory.h"
 #include <stdio.h>
 #include <string.h>
-#include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "filesys/free-map.h"
@@ -102,11 +101,12 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+	//printf("\n");
 	//printf("lookup: %s\n", name);
   
 	for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) {
-   	//hex_dump (0, &e, 0x10, true);
+   	//hex_dump (0, &e, sizeof e, true);
     if (e.in_use && !strcmp (name, e.name)) 
       {
         if (ep != NULL)
@@ -268,6 +268,7 @@ dir_change_dir (const char *dir)
 	else {
 		directory = dir_open_root();
 	}
+	inode = dir_get_inode(directory);
 
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)){
@@ -321,6 +322,7 @@ dir_make_dir (const char *dir)
 	else {
 		directory = dir_open_root();
 	}
+	inode = dir_get_inode(directory);
 
 		for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)) {	

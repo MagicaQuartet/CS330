@@ -57,6 +57,9 @@ filesys_create (const char *name, off_t initial_size)
 	block_sector_t inode_sector = 0;
 	bool is_relative, success = false, tmp1, tmp2, tmp3;
 	char *token, *save_ptr, *copy;
+
+	printf("filesys_create: create file %s (size %d)\n", name, initial_size);
+
 	if (strlen(name) == 0) {
 		lock_release(&fs_lock);
 		return false;
@@ -75,6 +78,7 @@ filesys_create (const char *name, off_t initial_size)
 	else {
 		dir = dir_open_root();
 	}
+	inode = dir_get_inode(dir);
 	
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 
@@ -95,10 +99,13 @@ filesys_create (const char *name, off_t initial_size)
           tmp1 = free_map_allocate (1, &inode_sector);
           tmp2 = inode_create (inode_sector, initial_size, 0, NULL);
           tmp3 = dir_add (dir, token, inode_sector, false);
+					//printf("temp1 %d, temp2 %d, temp3 %d\n", tmp1, tmp2, tmp3);
 					success = (dir != NULL
 										&& tmp1
 										&& tmp2
 										&& tmp3);
+//					if (success)
+//						printf("filesys_create: create file %s at sector 0x%x\n", name, inode_sector);
 					break;
 				}
 			}
@@ -151,6 +158,7 @@ filesys_open (const char *name)
 	else {
 		dir = dir_open_root();
 	}
+	inode = dir_get_inode(dir);
 	
 
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
@@ -227,6 +235,7 @@ filesys_remove (const char *name)
 	else {
 		dir = dir_open_root();
 	}
+	inode = dir_get_inode(dir);
 
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (dir, token, &inode)){

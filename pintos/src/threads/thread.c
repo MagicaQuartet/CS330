@@ -28,8 +28,10 @@
 struct file_info
 {
 	struct list_elem elem;
+	struct semaphore sema;
 	int fd;
 	struct file* file_p;
+	void *dir;
 };
 
 /* List of processes in THREAD_READY state, that is, processes
@@ -314,6 +316,14 @@ thread_exit (void)
 	struct thread *t;
 	lock_acquire(&thread_current()->lock_s_pt);
 	lock_acquire(&thread_current()->lock_pagedir);
+	
+	if (!list_empty(&thread_current()->file_list)){
+		for (e = list_begin(&thread_current()->file_list); e != list_end(&thread_current()->file_list); e = list_next(e)) {
+			struct file_info *finfo = list_entry(e, struct file_info, elem);
+			file_close(finfo->file_p);
+		}
+	}	
+
 #ifdef USERPROG
 
   process_exit ();

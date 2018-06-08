@@ -13,7 +13,7 @@ struct file_info
 	struct semaphore sema;
 	int fd;
 	struct file* file_p;
-	void * dir;
+	void *dir;
 };
 
 void syscall_init (void);
