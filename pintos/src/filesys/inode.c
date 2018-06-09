@@ -463,6 +463,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
+	//		printf("inode_read_at: read at sector %d\n", sector_idx);
+
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
@@ -559,6 +561,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 				}
 				inode_update(inode);
 			}
+//			printf("inode_write_at: read at sector %d\n", sector_idx);
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
@@ -690,6 +693,14 @@ inode_extend (struct inode *inode, int cnt)
   }
   //printf("next_indirect, indirect_idx : %d, %d\n", next_indirect, indirect_idx);
   indirect = (struct indirect_inode *)calloc (1, sizeof (struct indirect_inode));
+
+	if (indirect_idx == 0) {
+		if (free_map_allocate (1, &tmp)) {
+			block_write(fs_device, tmp, zeros);
+			inode->sectors[16+next_indirect] = tmp;
+		}
+	}
+
   if (indirect_idx != 0 && cnt > 0) {
     inode->indirect = next_indirect + 16;
     block_read (fs_device, inode->sectors[inode->indirect], indirect);
@@ -698,12 +709,6 @@ inode_extend (struct inode *inode, int cnt)
   }
   else if (cnt > 0) {
     inode->indirect = next_indirect + 16;
-  }
-  if (next_indirect == 0 && indirect_idx == 0){
-    if (free_map_allocate (1, &tmp)) {
-      block_write (fs_device, tmp, zeros);
-      inode->sectors[inode->indirect] = tmp;
-    }
   }
   while ((inode->indirect < 20) && (cnt > 0)) {
     
@@ -735,28 +740,6 @@ inode_extend (struct inode *inode, int cnt)
     }
     cnt--;
     indirect_idx++;
-    //printf("indirect_idx2 : %d, %d\n", indirect_idx, cnt);
-    /*
-    if (indirect_idx % 128 == 0 && indirect_idx > 0) {
-      //hex_dump (0, indirect, 128, true);
-      //printf("make indirect inode\n");
-      if (indirect != NULL){
-        //hex_dump (0, indirect, 128, true);
-        block_write (fs_device, inode->sectors[inode->indirect], indirect);
-        free (indirect);
-      }
-      // if we can't add more indirect node, break
-      if (inode->indirect == 19){
-        break;
-      }
-      inode->indirect = inode->indirect + 1;
-      indirect_idx = 0;
-      if (free_map_allocate (1, &tmp)) {
-        block_write (fs_device, tmp, zeros);
-        inode->sectors[inode->indirect] = tmp;
-      }
-      indirect = (struct indirect_inode *)calloc(1, sizeof(struct indirect_inode));
-    }*/
   }
   // finish in here?
   if (cnt == 0) {
