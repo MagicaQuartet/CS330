@@ -3,6 +3,7 @@
 
 #include <list.h>
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
 
@@ -12,6 +13,7 @@ struct file_info
 	struct semaphore sema;
 	int fd;
 	struct file* file_p;
+	void * dir;
 };
 
 void syscall_init (void);

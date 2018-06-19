@@ -119,7 +119,9 @@ struct thread
 
 		uint32_t *s_pt;
 		int mmap_id;
-		
+
+		uint32_t *current_dir;
+
 		struct lock lock_pagedir;
 		struct lock lock_s_pt;
 

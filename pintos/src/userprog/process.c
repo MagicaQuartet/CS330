@@ -58,6 +58,7 @@ process_execute (const char *file_name)
 	}
 
 	t = find_child_thread(&thread_current()->child_list, tid);
+	t->current_dir = dir_reopen(thread_current()->current_dir);
 	sema_up(&t->sema_child_list);
 	sema_down(&t->sema_load);
 	if (!t->exec_status) {
@@ -494,8 +495,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
 			lock_acquire_ft();
-			if (kpage == NULL)
+			if (kpage == NULL){
 				kpage = frame_evict();
+			}
       if (kpage == NULL) {
 				lock_release_ft();
         return false;
@@ -536,10 +538,11 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-	lock_acquire_ft();
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	if (kpage == NULL)
+	lock_acquire_ft();
+	if (kpage == NULL) {
 		kpage = frame_evict();
+	}
   if (kpage != NULL) 
     {
 			lock_acquire_pagedir(NULL);
