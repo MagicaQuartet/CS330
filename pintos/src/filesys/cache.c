@@ -26,7 +26,7 @@ struct buffer_cache
 };
 
 struct buffer_cache *cache;
-//struct lock cache_lock;
+struct lock cache_lock;
 
 void cache_destroyer (struct hash_elem *, void *);
 unsigned cache_hash (const struct hash_elem *, void *);
@@ -48,7 +48,7 @@ cache_init()
 	list_init(&cache->list);
 	cache->cnt = 0;
 
-	//lock_init(&cache_lock);
+	lock_init(&cache_lock);
 }
 
 void
@@ -82,13 +82,14 @@ cache_insert (int sector_idx)
 
 	if (cache->cnt >= CACHE_MAX) {
 		struct cache_entry *victim = list_entry(list_pop_front(&cache->list), struct cache_entry, list_elem);
-//		block_write(fs_device, victim->sector_idx, victim->data);
 		hash_delete (cache->hash, &victim->hash_elem);
 		free (victim->data);
 		free (victim);
 		cache->cnt--;
 	}
 	block_read (fs_device, sector_idx, entry->data);
+	//printf("cache insert, what is in that sector? : %d\n", sector_idx);
+	//hex_dump (0, entry->data, BLOCK_SECTOR_SIZE, true);
 	list_push_back(&cache->list, &entry->list_elem);
 	hash_insert(cache->hash, &entry->hash_elem);
 	cache->cnt++;
@@ -113,6 +114,8 @@ cache_read (void *p, void *buffer, off_t sector_ofs, int chunk_size)
 {
 	struct cache_entry *entry = (struct cache_entry *)p;
 	memcpy (buffer, entry->data + sector_ofs, chunk_size);
+	//printf("cache_read : %p\n", entry->data + sector_ofs);
+	//hex_dump (0, entry->data + sector_ofs, chunk_size, true);
 }
 
 void
@@ -155,14 +158,14 @@ cache_delete (int sector_idx)
 		cache->cnt--;
 	}
 }
-//void
-//cache_lock_acquire ()
-//{
-//	lock_acquire(&cache_lock);
-//}
+void
+cache_lock_acquire ()
+{
+	lock_acquire(&cache_lock);
+}
 
-//void
-//cache_lock_release ()
-//{
-//	lock_release(&cache_lock);
-//}
+void
+cache_lock_release ()
+{
+	lock_release(&cache_lock);
+}

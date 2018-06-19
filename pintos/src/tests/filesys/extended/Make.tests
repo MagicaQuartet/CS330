@@ -7,7 +7,7 @@ grow-file-size grow-root-lg grow-root-sm grow-seq-lg grow-seq-sm	\
 grow-sparse grow-tell grow-two-files syn-rw
 
 tests/filesys/extended_TESTS = $(patsubst %,tests/filesys/extended/%,$(raw_tests))
-#tests/filesys/extended_EXTRA_GRADES = $(patsubst %,tests/filesys/extended/%-persistence,$(raw_tests))
+tests/filesys/extended_EXTRA_GRADES = $(patsubst %,tests/filesys/extended/%-persistence,$(raw_tests))
 
 tests/filesys/extended_PROGS = $(tests/filesys/extended_TESTS) \
 tests/filesys/extended/child-syn-rw tests/filesys/extended/tar
@@ -31,19 +31,19 @@ tests/filesys/extended/dir-vine.output: TIMEOUT = 150
 
 GETTIMEOUT = 60
 
-#GETCMD = pintos -v -k -T $(GETTIMEOUT)
-#GETCMD += $(PINTOSOPTS)
-#GETCMD += $(SIMULATOR)
-#GETCMD += $(FILESYSSOURCE)
-#GETCMD += -g fs.tar -a $(TEST).tar
-#ifeq ($(filter vm, $(KERNEL_SUBDIRS)), vm)
-#GETCMD += --swap-size=4
-#endif
-#GETCMD += -- -q
-#GETCMD += $(KERNELFLAGS)
-#GETCMD += run 'tar fs.tar /'
-#GETCMD += < /dev/null
-#GETCMD += 2> $(TEST)-persistence.errors $(if $(VERBOSE),|tee,>) $(TEST)-persistence.output
+GETCMD = pintos -v -k -T $(GETTIMEOUT)
+GETCMD += $(PINTOSOPTS)
+GETCMD += $(SIMULATOR)
+GETCMD += $(FILESYSSOURCE)
+GETCMD += -g fs.tar -a $(TEST).tar
+ifeq ($(filter vm, $(KERNEL_SUBDIRS)), vm)
+GETCMD += --swap-size=4
+endif
+GETCMD += -- -q
+GETCMD += $(KERNELFLAGS)
+GETCMD += run 'tar fs.tar /'
+GETCMD += < /dev/null
+GETCMD += 2> $(TEST)-persistence.errors $(if $(VERBOSE),|tee,>) $(TEST)-persistence.output
 
 tests/filesys/extended/%.output: kernel.bin
 	rm -f tmp.dsk

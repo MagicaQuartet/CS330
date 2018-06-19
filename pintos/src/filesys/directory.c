@@ -1,7 +1,6 @@
 #include "filesys/directory.h"
 #include <stdio.h>
 #include <string.h>
-#include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "filesys/free-map.h"
@@ -102,8 +101,12 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e) 
+	//printf("\n");
+	//printf("lookup: %s\n", name);
+  
+	for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e) {
+   	//hex_dump (0, &e, sizeof e, true);
     if (e.in_use && !strcmp (name, e.name)) 
       {
         if (ep != NULL)
@@ -112,6 +115,7 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
+	}
   return false;
 
 
@@ -157,15 +161,12 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
   /* Check NAME for validity. */
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
-
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
-  
 	/* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -177,7 +178,6 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
        ofs += sizeof e) 
     if (!e.in_use)
       break;
-
   /* Write slot. */
   e.in_use = true;
 	e.is_dir = is_dir;
@@ -201,25 +201,23 @@ dir_remove (struct dir *dir, const char *name)
   bool success = false;
   off_t ofs;
 
-  ASSERT (dir != NULL);
+	ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
-
   /* Open inode. */
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
-
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
     goto done;
-
   /* Remove inode. */
   inode_remove (inode);
+  inode_close (inode);
   success = true;
 
  done:
@@ -271,6 +269,7 @@ dir_change_dir (const char *dir)
 	else {
 		directory = dir_open_root();
 	}
+	inode = dir_get_inode(directory);
 
 	for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)){
@@ -278,15 +277,20 @@ dir_change_dir (const char *dir)
 				continue;
 			else if (!strcmp (token, "..")) {
 				directory = dir_open((struct inode *)inode_get_parent(dir_get_inode(directory)));
-				if (directory == NULL)
+				if (directory == NULL) {
+					free(copy);
 					return false;
+				}
 				continue;
 			}
-			else
+			else{
+				free(copy);
 				return false;
+			}
 		}
 		
 		if (!inode_is_dir(inode)) {
+			free(copy);
 			return false;
 		}
 		else {
@@ -295,6 +299,7 @@ dir_change_dir (const char *dir)
 	}
 
 	thread_current()->current_dir = dir_reopen(directory);
+	free(copy);
 	return true;
 }
 
@@ -318,34 +323,43 @@ dir_make_dir (const char *dir)
 	else {
 		directory = dir_open_root();
 	}
+	inode = dir_get_inode(directory);
 
 		for (token = strtok_r (copy, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)) {
 		if (!dir_lookup (directory, token, &inode)) {	
 			if (!strcmp (token, "."))
 				continue;
 			else {
-				if (save_ptr[0] != '\0')
+				if (save_ptr[0] != '\0'){
+					free(copy);
 					return false;
+				}
 				else {
 					block_sector_t sector;
 	
 					if (free_map_allocate(1, &sector)) {
-						dir_create (sector, 16, directory->inode);
-						dir_add (directory, token, sector, true);
-						return true;
+						bool success;
+						success = dir_create (sector, 16, directory->inode)	&& dir_add (directory, token, sector, true);
+						free(copy);
+						return success;
 					}
-					else
+					else{
+						free(copy);
 						return false;
+					}
 				}
 			}
 		}
 		
-		if (!inode_is_dir(inode))
+		if (!inode_is_dir(inode)){
+			free(copy);
 			return false;
+		}
 		else {
 			directory = dir_open(inode);
 		}
 	}
+	free(copy);
 	return false;
 }
 

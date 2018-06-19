@@ -53,7 +53,7 @@ make_tar_archive (const char *archive_name, char *files[], size_t file_cnt)
   bool success = true;
   bool write_error = false;
   size_t i;
-  
+  //printf("make tar archive : %s\n", archive_name);
   if (!create (archive_name, 0)) 
     {
       printf ("%s: create failed\n", archive_name);
@@ -71,6 +71,7 @@ make_tar_archive (const char *archive_name, char *files[], size_t file_cnt)
       char file_name[128];
       
       strlcpy (file_name, files[i], sizeof file_name);
+      //printf(" make tar archive cnt, each name : %d, %s\n", sizeof file_name, file_name);
       if (!archive_file (file_name, sizeof file_name,
                          archive_fd, &write_error))
         success = false;
@@ -89,7 +90,9 @@ static bool
 archive_file (char file_name[], size_t file_name_size,
               int archive_fd, bool *write_error) 
 {
+  //printf("archive_file : %s\n", file_name);
   int file_fd = open (file_name);
+  //printf("archive_file : file_fd : %d\n", file_fd);
   if (file_fd >= 0) 
     {
       bool success;
@@ -105,6 +108,7 @@ archive_file (char file_name[], size_t file_name_size,
         }
       else
         {
+          //printf("come to here\n");
           /* Nothing to do: don't try to archive the archive file. */
           success = true;
         }
@@ -127,7 +131,7 @@ archive_ordinary_file (const char *file_name, int file_fd,
   bool read_error = false;
   bool success = true;
   int file_size = filesize (file_fd);
-
+  //printf("archive ordinary file : %s\n", file_name);
   if (!write_header (file_name, USTAR_REGULAR, file_size,
                      archive_fd, write_error))
     return false;
@@ -135,13 +139,14 @@ archive_ordinary_file (const char *file_name, int file_fd,
   while (file_size > 0) 
     {
       static char buf[512];
+      //printf("archive ordinary file : %d, %s\n", file_size, file_name);
       int chunk_size = file_size > 512 ? 512 : file_size;
       int read_retval = read (file_fd, buf, chunk_size);
       int bytes_read = read_retval > 0 ? read_retval : 0;
 
       if (bytes_read != chunk_size && !read_error) 
         {
-          printf ("%s: read error\n", file_name);
+          //printf ("%s: read error\n", file_name);
           read_error = true;
           success = false;
         }
@@ -162,11 +167,11 @@ archive_directory (char file_name[], size_t file_name_size, int file_fd,
 {
   size_t dir_len;
   bool success = true;
-
+  //printf("archive directory : %s\n", file_name);
   dir_len = strlen (file_name);
   if (dir_len + 1 + READDIR_MAX_LEN + 1 > file_name_size) 
     {
-      printf ("%s: file name too long\n", file_name);
+      //printf ("%s: file name too long\n", file_name);
       return false;
     }
 

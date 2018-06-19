@@ -58,6 +58,9 @@ syscall_handler (struct intr_frame *f)
 	if (!is_valid_uaddr(p)){
 		bad_exit(f);
 	}
+
+	//printf("syscall #%d\n", syscall);
+	
 	switch (syscall)
 	{
 		case SYS_HALT:
@@ -71,9 +74,8 @@ syscall_handler (struct intr_frame *f)
 					temp = e;
 					e = list_remove(e);
 					file_close(list_entry(temp, struct file_info, elem)->file_p);
-					//free(list_entry(temp, struct file_info, elem));
+					free(list_entry(temp, struct file_info, elem));
 				}
-//	printf("thread %d file closed\n", thread_current()->tid);
 				printf("%s: exit(%d)\n",thread_current()->name, *(int *)p);
 				thread_current()->exit_status = *(int *)p;
 				f->eax = *(int *)p;
@@ -99,6 +101,7 @@ syscall_handler (struct intr_frame *f)
 		case SYS_CREATE:
 			if (is_valid_uaddr (*(void **)p)) {
 				lock_acquire(&lock);
+				//printf("create_handler: create file %s\n", *(char **)p);
 				f->eax = filesys_create (*(char **)p, *(off_t *)(p+sizeof(char **)));
 				lock_release(&lock);
 			}
@@ -121,7 +124,6 @@ syscall_handler (struct intr_frame *f)
 				lock_acquire(&lock);
 				temp = open_handler(*(char **)p);
 				lock_release(&lock);
-				//printf(">>>open: return %d<<<\n", temp);
 				if (temp == 0 || temp == 1) {
 					bad_exit(f);
 				}
@@ -250,11 +252,11 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_ISDIR:
-			f->eax = inode_is_dir(file_get_inode(find_opened_file_info(*(int *)p, thread_current())));
+			f->eax = inode_is_dir(file_get_inode(find_opened_file_info(*(int *)p, thread_current())->file_p));
 			break;
 
 		case SYS_INUMBER:
-			f->eax = inode_get_inumber (file_get_inode(find_opened_file_info(*(int *)p, thread_current())));
+			f->eax = inode_get_inumber (file_get_inode(find_opened_file_info(*(int *)p, thread_current())->file_p));
 			break;
 
 		default:
@@ -272,7 +274,7 @@ open_handler(const char *name)
 	if (finfo == NULL) {
 		printf("open_handler: malloc failed!\n");
 	}
-
+	//printf("open_handler: open file %s\n", name);
 	f = filesys_open(name);
 	if (f != NULL) {
 		finfo->fd = (thread_current()->fd_cnt)++;
@@ -285,6 +287,7 @@ open_handler(const char *name)
 		if (strcmp(name, thread_current()->name) == 0){
 			file_deny_write(f);
 		}
+		//printf("open_handler: file %s is opened as fd %d\n", name, finfo->fd);
 		return finfo->fd;
 	}
 	else {
@@ -301,8 +304,6 @@ filesize_handler(int fd)
 	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
-		if (inode_is_dir(file_get_inode(finfo->file_p)))
-			return -1;
 		size = file_length(finfo->file_p);
 	}
 
@@ -353,7 +354,6 @@ write_handler (int fd, const void *buffer, unsigned size)
 	struct file_info *finfo;
 	int pages = DIV_ROUND_UP(size + 1, PGSIZE), i;
 	int result;
-	
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
 		if (inode_is_dir(file_get_inode(finfo->file_p)))
@@ -394,6 +394,9 @@ close_handler(int fd)
 	struct file_info *finfo;
 	finfo = find_opened_file_info(fd, thread_current());
 	if (finfo != NULL) {
+		//printf("close_handler: close file (%d)\n", fd);
+		if (finfo->dir != NULL)
+			dir_close(finfo->dir);
 		file_close(finfo->file_p);
 		list_remove (&finfo->elem);
 		free(finfo);
